@@ -1,5 +1,6 @@
 use std::fmt;
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct Packet {
     timestamp: u64,
     source: String,
