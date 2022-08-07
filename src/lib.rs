@@ -45,38 +45,14 @@ fn fill_ip_address(packet: &SlicedPacket, dest_packet: &mut Packet) {
             dest_packet.set_destination(String::from(header.to_header().destination.map(|it| { it.to_string() }).to_vec().join(".")));
         }
         Some(Ipv6(header, ..)) => {
-            dest_packet.set_source(hex::encode_upper(header.to_header().source.to_vec())
-                .chars()
-                .collect::<Vec<char>>()
-                .chunks(2)
-                .map(|c| c.iter().collect::<String>())
-                .collect::<Vec<String>>()
-                .join(":"));
-            dest_packet.set_destination(hex::encode_upper(header.to_header().destination.to_vec())
-                .chars()
-                .collect::<Vec<char>>()
-                .chunks(2)
-                .map(|c| c.iter().collect::<String>())
-                .collect::<Vec<String>>()
-                .join(":"));
+            dest_packet.set_source(to_hex_string(header.to_header().source.to_vec()));
+            dest_packet.set_destination(to_hex_string(header.to_header().destination.to_vec()));
         }
         None => {
             match &packet.link {
                 Some(Ethernet2(header, ..)) => {
-                    dest_packet.set_source(hex::encode_upper(header.to_header().source.to_vec())
-                        .chars()
-                        .collect::<Vec<char>>()
-                        .chunks(2)
-                        .map(|c| c.iter().collect::<String>())
-                        .collect::<Vec<String>>()
-                        .join(":"));
-                    dest_packet.set_destination(hex::encode_upper(header.to_header().destination.to_vec())
-                        .chars()
-                        .collect::<Vec<char>>()
-                        .chunks(2)
-                        .map(|c| c.iter().collect::<String>())
-                        .collect::<Vec<String>>()
-                        .join(":"));
+                    dest_packet.set_source(to_hex_string(header.to_header().source.to_vec()));
+                    dest_packet.set_destination(to_hex_string(header.to_header().destination.to_vec()));
 
                     //ether type match
                     let ethertype = match header.ether_type() {
@@ -148,4 +124,14 @@ fn fill_timestamp(packet: &PacketHeader, dest_packet: &mut Packet) {
         }
         _ => {}
     }
+}
+
+fn to_hex_string(address: Vec<u8>) -> String {
+    hex::encode_upper(address)
+        .chars()
+        .collect::<Vec<char>>()
+        .chunks(2)
+        .map(|c| c.iter().collect::<String>())
+        .collect::<Vec<String>>()
+        .join(":")
 }
