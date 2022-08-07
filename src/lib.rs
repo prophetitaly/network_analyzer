@@ -1,5 +1,5 @@
 mod packet;
-mod parameters;
+pub mod parameters;
 
 use etherparse::InternetSlice::{Ipv4, Ipv6};
 use etherparse::{ SlicedPacket };
@@ -7,6 +7,7 @@ use etherparse::LinkSlice::Ethernet2;
 use etherparse::TransportSlice::{Icmpv4, Icmpv6, Tcp, Udp, Unknown};
 use pcap::{Activated, Device, Capture, PacketHeader, Address};
 use crate::packet::Packet;
+use crate::parameters::Parameters;
 
 pub fn get_devices() -> Vec<(String, Vec<Address>)> {
     let devices = Device::list().unwrap();
@@ -17,7 +18,9 @@ pub fn get_devices() -> Vec<(String, Vec<Address>)> {
     device_names
 }
 
-pub fn analyze_network(device_id: usize) {
+pub fn analyze_network(parameters: Parameters) {
+
+    let device_id = parameters.device_id.unwrap();
     let main_device = Device::list().unwrap();
     let device = main_device.get(device_id).unwrap().clone();
     let cap = Capture::from_device(device).unwrap()
@@ -25,9 +28,6 @@ pub fn analyze_network(device_id: usize) {
         .snaplen(5000)
         .open().unwrap();
 
-    // while let Ok(packet) = cap.next() {
-    //     println!("received packet! {:?}", packet);
-    // }
     read_packets(cap)
 }
 
