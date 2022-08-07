@@ -6,12 +6,21 @@ use etherparse::InternetSlice::{Ipv4, Ipv6};
 use etherparse::{Icmpv4Slice, SlicedPacket, TcpHeader, TcpHeaderSlice};
 use etherparse::LinkSlice::Ethernet2;
 use etherparse::TransportSlice::{Icmpv4, Icmpv6, Tcp, Udp, Unknown};
-use pcap::{Activated, Device, Capture, PacketHeader};
+use pcap::{Activated, Device, Capture, PacketHeader, Address};
 use crate::packet::Packet;
 
-pub fn analyze_network() {
+pub fn get_devices() -> Vec<(String, Vec<Address>)> {
+    let devices = Device::list().unwrap();
+    let mut device_names: Vec<(String, Vec<Address>)> = Vec::new();
+    for device in devices {
+        device_names.push((device.desc.unwrap().to_string(), device.addresses));
+    }
+    device_names
+}
+
+pub fn analyze_network(device_id: usize) {
     let main_device = Device::list().unwrap();
-    let device = main_device.get(1).unwrap().clone();
+    let device = main_device.get(device_id).unwrap().clone();
     let mut cap = Capture::from_device(device).unwrap()
         .promisc(true)
         .snaplen(5000)
