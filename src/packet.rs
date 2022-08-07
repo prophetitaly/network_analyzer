@@ -40,7 +40,7 @@ impl Packet {
         let datetime: DateTime<Utc> = DateTime::from_utc(naive, Utc);
 
         // Format the datetime how you want
-        let newdate = datetime.format("%H:%M:%S%.f");
+        let newdate = datetime.format("%H:%M:%S%.3f");
         self.timestamp = newdate.to_string();
     }
     pub fn set_source(&mut self, source: String) {
