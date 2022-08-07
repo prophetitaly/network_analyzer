@@ -1,6 +1,6 @@
 use std::fmt;
 use chrono::{DateTime, NaiveDateTime, Utc};
-use libc::{c_long, time};
+use libc::{c_long};
 use num_traits::FromPrimitive;
 
 #[derive(Debug, Clone, PartialEq)]

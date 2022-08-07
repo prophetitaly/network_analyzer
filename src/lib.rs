@@ -1,9 +1,8 @@
 mod packet;
+mod parameters;
 
-use std::fmt;
-use std::fmt::Display;
 use etherparse::InternetSlice::{Ipv4, Ipv6};
-use etherparse::{Icmpv4Slice, SlicedPacket, TcpHeader, TcpHeaderSlice};
+use etherparse::{ SlicedPacket };
 use etherparse::LinkSlice::Ethernet2;
 use etherparse::TransportSlice::{Icmpv4, Icmpv6, Tcp, Udp, Unknown};
 use pcap::{Activated, Device, Capture, PacketHeader, Address};
@@ -21,7 +20,7 @@ pub fn get_devices() -> Vec<(String, Vec<Address>)> {
 pub fn analyze_network(device_id: usize) {
     let main_device = Device::list().unwrap();
     let device = main_device.get(device_id).unwrap().clone();
-    let mut cap = Capture::from_device(device).unwrap()
+    let cap = Capture::from_device(device).unwrap()
         .promisc(true)
         .snaplen(5000)
         .open().unwrap();
@@ -49,7 +48,7 @@ fn read_packets<T: Activated>(mut capture: Capture<T>) {
 
 fn fill_ip_address(packet: &SlicedPacket, dest_packet: &mut Packet) {
     match &packet.ip {
-        Some(Ipv4(header, extension)) => {
+        Some(Ipv4(header, ..)) => {
             dest_packet.set_source(String::from(header.to_header().source.map(|it| { it.to_string() }).to_vec().join(".")));
             dest_packet.set_destination(String::from(header.to_header().destination.map(|it| { it.to_string() }).to_vec().join(".")));
         }
@@ -108,15 +107,15 @@ fn fill_protocol_and_ports(packet: &SlicedPacket, dest_packet: &mut Packet) {
                     dest_packet.set_source_port(header_slice.to_header().source_port.to_string());
                     dest_packet.set_destination_port(header_slice.to_header().destination_port.to_string());
                 }
-                Icmpv4(slice) => {
+                Icmpv4(..) => {
                     dest_packet.set_protocol(String::from("ICMPv4"));
                     // dest_packet.set_info(slice.header().icmp_type.to_string());
                 }
-                Icmpv6(slice) => {
+                Icmpv6(..) => {
                     dest_packet.set_protocol(String::from("ICMPv6"));
                     // dest_packet.set_info(slice.header().icmp_type.to_string());
                 }
-                Unknown(val) => {
+                Unknown(..) => {
                     dest_packet.set_protocol(String::from("Unknown"));
                     dest_packet.set_info(String::from("UNKNOWN"));
                 }
@@ -132,7 +131,6 @@ fn fill_timestamp_and_lenght(packet: &PacketHeader, dest_packet: &mut Packet) {
         val => {
             dest_packet.set_timestamp(&val.tv_sec, &val.tv_usec);
         }
-        _ => {}
     }
 }
 
