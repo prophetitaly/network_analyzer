@@ -56,8 +56,8 @@ impl Packet {
     pub fn set_protocol(&mut self, protocol: String) {
         self.protocol = protocol;
     }
-    pub fn set_length(&mut self, length: u32) {
-        self.length = length;
+    pub fn set_length(&mut self, length: &u32) {
+        self.length = length.clone();
     }
     pub fn set_info(&mut self, info: String) {
         self.info = info;

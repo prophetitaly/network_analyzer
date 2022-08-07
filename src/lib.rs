@@ -11,7 +11,7 @@ use crate::packet::Packet;
 
 pub fn analyze_network() {
     let main_device = Device::list().unwrap();
-    let device = main_device.get(0).unwrap().clone();
+    let device = main_device.get(1).unwrap().clone();
     let mut cap = Capture::from_device(device).unwrap()
         .promisc(true)
         .snaplen(5000)
@@ -29,7 +29,7 @@ fn read_packets<T: Activated>(mut capture: Capture<T>) {
             Err(value) => println!("Err {:?}", value),
             Ok(sliced_packet) => {
                 let mut result = Packet::new(Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default());
-                fill_timestamp(&packet.header, &mut result);
+                fill_timestamp_and_lenght(&packet.header, &mut result);
                 fill_ip_address(&sliced_packet, &mut result);
                 fill_protocol_and_ports(&sliced_packet, &mut result);
                 println!("{:?}", result);
@@ -117,7 +117,8 @@ fn fill_protocol_and_ports(packet: &SlicedPacket, dest_packet: &mut Packet) { //
     }
 }
 
-fn fill_timestamp(packet: &PacketHeader, dest_packet: &mut Packet) {
+fn fill_timestamp_and_lenght(packet: &PacketHeader, dest_packet: &mut Packet) {
+    dest_packet.set_length(&packet.len);
     match &packet.ts {
         val => {
             dest_packet.set_timestamp(&val.tv_sec);
