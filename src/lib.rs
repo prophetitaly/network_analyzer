@@ -29,6 +29,7 @@ fn read_packets<T: Activated>(mut capture: Capture<T>) {
             Err(value) => println!("Err {:?}", value),
             Ok(sliced_packet) => {
                 let mut result = Packet::new(Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default());
+                fill_timestamp(&packet.header, &mut result);
                 fill_ip_address(&sliced_packet, &mut result);
                 fill_protocol_and_ports(&sliced_packet, &mut result);
                 println!("{:?}", result);
@@ -135,6 +136,15 @@ fn fill_protocol_and_ports(packet: &SlicedPacket, dest_packet: &mut Packet) {
                     dest_packet.set_info(String::from("UNKNOWN"));
                 }
             }
+        }
+        _ => {}
+    }
+}
+
+fn fill_timestamp(packet: &PacketHeader, dest_packet: &mut Packet) {
+    match &packet.ts {
+        val => {
+            dest_packet.set_timestamp(&val.tv_sec);
         }
         _ => {}
     }

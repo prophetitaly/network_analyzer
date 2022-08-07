@@ -1,8 +1,10 @@
 use std::fmt;
+use chrono::{DateTime, NaiveDateTime, Utc};
+use libc::{c_long, time};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Packet {
-    timestamp: u64,
+    timestamp: String,
     source: String,
     destination: String,
     source_port: String,
@@ -13,7 +15,7 @@ pub struct Packet {
 }
 
 impl Packet {
-    pub fn new(timestamp: u64, source: String, destination: String, source_port: String, destination_port: String, protocol: String, length: u32, info: String) -> Self {
+    pub fn new(timestamp: String, source: String, destination: String, source_port: String, destination_port: String, protocol: String, length: u32, info: String) -> Self {
         Packet {
             timestamp,
             source,
@@ -27,8 +29,17 @@ impl Packet {
     }
 
     //setter for all properties
-    pub fn set_timestamp(&mut self, timestamp: u64) {
-        self.timestamp = timestamp;
+    pub fn set_timestamp(&mut self, timestamp: &c_long) {
+        let ts = *timestamp as i64;
+        // Create a NaiveDateTime from the timestamp
+        let naive = NaiveDateTime::from_timestamp(ts, 0);
+
+        // Create a normal DateTime from the NaiveDateTime
+        let datetime: DateTime<Utc> = DateTime::from_utc(naive, Utc);
+
+        // Format the datetime how you want
+        let newdate = datetime.format("%Y-%m-%d %H:%M:%S");
+        self.timestamp = newdate.to_string();
     }
     pub fn set_source(&mut self, source: String) {
         self.source = source;
