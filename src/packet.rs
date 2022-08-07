@@ -1,6 +1,7 @@
 use std::fmt;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use libc::{c_long, time};
+use num_traits::FromPrimitive;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Packet {
@@ -29,16 +30,17 @@ impl Packet {
     }
 
     //setter for all properties
-    pub fn set_timestamp(&mut self, timestamp: &c_long) {
-        let ts = *timestamp as i64;
+    pub fn set_timestamp(&mut self, timestamp: &c_long, timestamp_ns: &c_long) {
+        let ts = i64::from_i32(*timestamp).unwrap();
+        let ts_ns = u32::from_i32(*timestamp_ns).unwrap();
         // Create a NaiveDateTime from the timestamp
-        let naive = NaiveDateTime::from_timestamp(ts, 0);
+        let naive = NaiveDateTime::from_timestamp(ts, ts_ns*1000);
 
         // Create a normal DateTime from the NaiveDateTime
         let datetime: DateTime<Utc> = DateTime::from_utc(naive, Utc);
 
         // Format the datetime how you want
-        let newdate = datetime.format("%Y-%m-%d %H:%M:%S");
+        let newdate = datetime.format("%H:%M:%S%.f");
         self.timestamp = newdate.to_string();
     }
     pub fn set_source(&mut self, source: String) {

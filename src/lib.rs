@@ -130,7 +130,7 @@ fn fill_timestamp_and_lenght(packet: &PacketHeader, dest_packet: &mut Packet) {
     dest_packet.set_length(&packet.len);
     match &packet.ts {
         val => {
-            dest_packet.set_timestamp(&val.tv_sec);
+            dest_packet.set_timestamp(&val.tv_sec, &val.tv_usec);
         }
         _ => {}
     }
