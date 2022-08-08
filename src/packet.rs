@@ -29,7 +29,6 @@ impl Packet {
         }
     }
 
-    //setter for all properties
     pub fn set_timestamp(&mut self, timestamp: &c_long, timestamp_ns: &c_long) {
         let ts = i64::from_i32(*timestamp).unwrap();
         let ts_ns = u32::from_i32(*timestamp_ns).unwrap();
@@ -66,19 +65,8 @@ impl Packet {
     }
 }
 
-//implement display for packet
 impl fmt::Display for Packet {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.info)
     }
 }
-
-
-// #[cfg(test)]
-// mod tests {
-//     #[test]
-//     fn it_works() {
-//         let result = 2 + 2;
-//         assert_eq!(result, 4);
-//     }
-// }
