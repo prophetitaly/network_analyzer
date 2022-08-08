@@ -42,6 +42,8 @@ impl Packet {
         let newdate = datetime.format("%H:%M:%S%.3f");
         self.timestamp = newdate.to_string();
     }
+
+    //Setters
     pub fn set_source(&mut self, source: String) {
         self.source = source;
     }
@@ -63,10 +65,36 @@ impl Packet {
     pub fn set_info(&mut self, info: String) {
         self.info = info;
     }
+
+    //Getters
+    pub fn get_timestamp(&self) -> &String {
+        &self.timestamp
+    }
+    pub fn get_source(&self) -> &String {
+        &self.source
+    }
+    pub fn get_destination(&self) -> &String {
+        &self.destination
+    }
+    pub fn get_source_port(&self) -> &String {
+        &self.source_port
+    }
+    pub fn get_destination_port(&self) -> &String {
+        &self.destination_port
+    }
+    pub fn get_protocol(&self) -> &String {
+        &self.protocol
+    }
+    pub fn get_length(&self) -> &u32 {
+        &self.length
+    }
+    pub fn get_info(&self) -> &String {
+        &self.info
+    }
 }
 
 impl fmt::Display for Packet {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.info)
+        write!(f, "{} {} {} {} {} {} {} {}", self.timestamp, self.source, self.destination, self.source_port, self.destination_port, self.protocol, self.length, self.info)
     }
 }

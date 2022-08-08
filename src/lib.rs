@@ -1,5 +1,6 @@
 mod packet;
 pub mod parameters;
+mod report;
 
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
@@ -11,6 +12,7 @@ use pcap::{Device, Capture, PacketHeader, Address, Active};
 use threadpool::ThreadPool;
 use crate::packet::Packet as MyPacket;
 use crate::parameters::Parameters;
+use crate::report::Report;
 
 pub fn get_devices() -> Vec<(String, Vec<Address>)> {
     let devices = Device::list().unwrap();
@@ -42,6 +44,8 @@ pub fn analyze_network(parameters: Parameters) {
 
 fn read_packets(mut capture: Capture<Active>, parameters: Parameters) {
 
+    let report = Arc::new(Mutex::new(Report::default()));
+
     //create a thread pool to handle the packets
     let pool = ThreadPool::new(num_cpus::get());
 
@@ -63,6 +67,7 @@ fn read_packets(mut capture: Capture<Active>, parameters: Parameters) {
             Ok(packet) => {
                 let packet_data = packet.data.to_owned();
                 let packet_header = packet.header.to_owned();
+                let report_copy = report.clone();
                 pool.execute(move || {
                     match SlicedPacket::from_ethernet(&*packet_data) {
                         Err(..) => {}
@@ -71,7 +76,8 @@ fn read_packets(mut capture: Capture<Active>, parameters: Parameters) {
                             fill_timestamp_and_lenght(&packet_header, &mut result);
                             fill_ip_address(&sliced_packet, &mut result);
                             fill_protocol_and_ports(&sliced_packet, &mut result);
-                            println!("{:?}", result);
+                            // println!("{:?}", result);
+                            report_copy.lock().unwrap().add_packet(result);
                         }
                     }
                 });
@@ -80,6 +86,7 @@ fn read_packets(mut capture: Capture<Active>, parameters: Parameters) {
         };
     };
     pool.join();
+    println!("{}", report.lock().unwrap());
 }
 
 fn fill_ip_address(packet: &SlicedPacket, dest_packet: &mut MyPacket) {
