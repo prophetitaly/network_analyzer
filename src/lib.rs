@@ -1,6 +1,8 @@
 mod packet;
 pub mod parameters;
 
+use std::ops::Deref;
+use std::sync::{Arc, Mutex};
 use etherparse::InternetSlice::{Ipv4, Ipv6};
 use etherparse::{ SlicedPacket };
 use etherparse::LinkSlice::Ethernet2;
@@ -28,20 +30,35 @@ pub fn analyze_network(parameters: Parameters) {
         .snaplen(5000)
         .open().unwrap();
 
-    read_packets(cap)
+    read_packets(cap, parameters)
 }
 
-fn read_packets<T: Activated>(mut capture: Capture<T>) {
-    while let Ok(packet) = capture.next() {
-        match SlicedPacket::from_ethernet(&packet) {
-            Err(value) => println!("Err {:?}", value),
-            Ok(sliced_packet) => {
-                let mut result = Packet::new(Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default());
-                fill_timestamp_and_lenght(&packet.header, &mut result);
-                fill_ip_address(&sliced_packet, &mut result);
-                fill_protocol_and_ports(&sliced_packet, &mut result);
-                println!("{:?}", result);
+fn read_packets<T: Activated>(mut capture: Capture<T>, parameters: Parameters) {
+    //start a timer that changer a variable to true when the timeout is reached
+    let mut timeout = Arc::new(Mutex::new(false));
+    let timeout_clone = timeout.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(u64::from(parameters.timeout.unwrap())));
+        *timeout_clone.lock().unwrap() = true;
+    });
+
+    while !timeout.lock().unwrap().deref() {
+        //TODO: se non arrivano pacchetti e il timer scatta, il thread rimane comunque
+        // bloccato finchè arriva almeno un pacchetto a causa di capture.next() #risolvere
+        match capture.next() {
+            Ok(packet) => {
+                match SlicedPacket::from_ethernet(&packet) {
+                    Err(..) => {},
+                    Ok(sliced_packet) => {
+                        let mut result = Packet::new(Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default());
+                        fill_timestamp_and_lenght(&packet.header, &mut result);
+                        fill_ip_address(&sliced_packet, &mut result);
+                        fill_protocol_and_ports(&sliced_packet, &mut result);
+                        println!("{:?}", result);
+                    }
+                }
             }
+            Err(..) => {},
         }
     }
 }
