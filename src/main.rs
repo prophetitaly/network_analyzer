@@ -11,7 +11,7 @@ fn main() {
                 if arg.starts_with("-") {
                     let (key, value) = arg.split_at(1);
                     match value {
-                        "d" => parameters.set_device_id(args[index+1].parse::<usize>().unwrap()),
+                        "d" => parameters.set_device_id(args[index+1].parse::<usize>().unwrap() - 1),
                         "t" => parameters.set_timeout(args[index+1].parse::<u32>().unwrap()),
                         "f" => parameters.set_file_path(args[index+1].to_string()),
                         "p" => parameters.set_protocol(args[index+1].to_string()),
