@@ -34,8 +34,12 @@ pub fn analyze_network(parameters: Parameters) {
 }
 
 fn read_packets<T: Activated>(mut capture: Capture<T>, parameters: Parameters) {
+
+    //create a thread pool to handle the packets
+
+
     //start a timer that changer a variable to true when the timeout is reached
-    let mut timeout = Arc::new(Mutex::new(false));
+    let timeout = Arc::new(Mutex::new(false));
     let timeout_clone = timeout.clone();
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_secs(u64::from(parameters.timeout.unwrap())));
