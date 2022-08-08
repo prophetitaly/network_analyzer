@@ -13,6 +13,7 @@ libc = "0.2.127"
 chrono = "0.4.20"
 num-traits = "0.2.15"
 threadpool = "1.8.1"
+num_cpus = "1.13.1"
 
 [[bin]]
 name = "sample_app"

@@ -4,11 +4,12 @@ pub mod parameters;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use etherparse::InternetSlice::{Ipv4, Ipv6};
-use etherparse::{ SlicedPacket };
+use etherparse::{SlicedPacket};
 use etherparse::LinkSlice::Ethernet2;
 use etherparse::TransportSlice::{Icmpv4, Icmpv6, Tcp, Udp, Unknown};
-use pcap::{Activated, Device, Capture, PacketHeader, Address};
-use crate::packet::Packet;
+use pcap::{Activated, Device, Capture, Packet, PacketHeader, Address, Active};
+use threadpool::ThreadPool;
+use crate::packet::Packet as MyPacket;
 use crate::parameters::Parameters;
 
 pub fn get_devices() -> Vec<(String, Vec<Address>)> {
@@ -21,22 +22,22 @@ pub fn get_devices() -> Vec<(String, Vec<Address>)> {
 }
 
 pub fn analyze_network(parameters: Parameters) {
-
     let device_id = parameters.device_id.unwrap();
     let main_device = Device::list().unwrap();
     let device = main_device.get(device_id).unwrap().clone();
-    let cap = Capture::from_device(device).unwrap()
+    let mut cap = Capture::from_device(device).unwrap()
         .promisc(true)
         .snaplen(5000)
-        .open().unwrap();
+        .open()
+        .unwrap();
 
-    read_packets(cap, parameters)
+    read_packets(cap, parameters);
 }
 
-fn read_packets<T: Activated>(mut capture: Capture<T>, parameters: Parameters) {
+fn read_packets(mut capture: Capture<Active>, parameters: Parameters) {
 
     //create a thread pool to handle the packets
-
+    let pool = ThreadPool::new(num_cpus::get());
 
     //start a timer that changer a variable to true when the timeout is reached
     let timeout = Arc::new(Mutex::new(false));
@@ -49,25 +50,33 @@ fn read_packets<T: Activated>(mut capture: Capture<T>, parameters: Parameters) {
     while !timeout.lock().unwrap().deref() {
         //TODO: se non arrivano pacchetti e il timer scatta, il thread rimane comunque
         // bloccato finchè arriva almeno un pacchetto a causa di capture.next() #risolvere
+        // possibile soluzione: usare .timeout() su capture
+
+
         match capture.next() {
             Ok(packet) => {
-                match SlicedPacket::from_ethernet(&packet) {
-                    Err(..) => {},
-                    Ok(sliced_packet) => {
-                        let mut result = Packet::new(Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default());
-                        fill_timestamp_and_lenght(&packet.header, &mut result);
-                        fill_ip_address(&sliced_packet, &mut result);
-                        fill_protocol_and_ports(&sliced_packet, &mut result);
-                        println!("{:?}", result);
+                let packet_data = packet.data.to_owned();
+                let packet_header = packet.header.to_owned();
+                pool.execute(move || {
+                    match SlicedPacket::from_ethernet(&*packet_data) {
+                        Err(..) => {}
+                        Ok(sliced_packet) => {
+                            let mut result = MyPacket::new(Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default());
+                            fill_timestamp_and_lenght(&packet_header, &mut result);
+                            fill_ip_address(&sliced_packet, &mut result);
+                            fill_protocol_and_ports(&sliced_packet, &mut result);
+                            println!("{:?}", result);
+                        }
                     }
-                }
-            }
+                });
+            },
             Err(..) => {},
-        }
-    }
+        };
+    };
+    pool.join();
 }
 
-fn fill_ip_address(packet: &SlicedPacket, dest_packet: &mut Packet) {
+fn fill_ip_address(packet: &SlicedPacket, dest_packet: &mut MyPacket) {
     match &packet.ip {
         Some(Ipv4(header, ..)) => {
             dest_packet.set_source(String::from(header.to_header().source.map(|it| { it.to_string() }).to_vec().join(".")));
@@ -113,7 +122,7 @@ fn fill_ip_address(packet: &SlicedPacket, dest_packet: &mut Packet) {
     }
 }
 
-fn fill_protocol_and_ports(packet: &SlicedPacket, dest_packet: &mut Packet) {
+fn fill_protocol_and_ports(packet: &SlicedPacket, dest_packet: &mut MyPacket) {
     let packet_copy = packet.clone();
     match packet_copy.transport {
         Some(val) => {
@@ -146,7 +155,7 @@ fn fill_protocol_and_ports(packet: &SlicedPacket, dest_packet: &mut Packet) {
     }
 }
 
-fn fill_timestamp_and_lenght(packet: &PacketHeader, dest_packet: &mut Packet) {
+fn fill_timestamp_and_lenght(packet: &PacketHeader, dest_packet: &mut MyPacket) {
     dest_packet.set_length(&packet.len);
     match &packet.ts {
         val => {

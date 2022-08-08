@@ -1,5 +1,5 @@
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct Parameters {
     pub device_id: Option<usize>,
     pub timeout: Option<u32>,
