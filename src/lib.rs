@@ -7,7 +7,7 @@ use etherparse::InternetSlice::{Ipv4, Ipv6};
 use etherparse::{SlicedPacket};
 use etherparse::LinkSlice::Ethernet2;
 use etherparse::TransportSlice::{Icmpv4, Icmpv6, Tcp, Udp, Unknown};
-use pcap::{Activated, Device, Capture, Packet, PacketHeader, Address, Active};
+use pcap::{Device, Capture, PacketHeader, Address, Active};
 use threadpool::ThreadPool;
 use crate::packet::Packet as MyPacket;
 use crate::parameters::Parameters;
@@ -22,7 +22,7 @@ pub fn get_devices() -> Vec<(String, Vec<Address>)> {
 }
 
 pub fn analyze_network(parameters: Parameters) {
-    let device_id = parameters.device_id.unwrap();
+    let device_id = parameters.device_id;
     let main_device = Device::list().unwrap();
     let device = main_device.get(device_id).unwrap().clone();
     let mut cap = Capture::from_device(device).unwrap()
@@ -30,6 +30,12 @@ pub fn analyze_network(parameters: Parameters) {
         .snaplen(5000)
         .open()
         .unwrap();
+
+    if let Some(filter) = &parameters.filter {
+        cap
+            .filter(filter, true)
+            .expect("Filters invalid, please check the documentation.");
+    }
 
     read_packets(cap, parameters);
 }
@@ -43,7 +49,7 @@ fn read_packets(mut capture: Capture<Active>, parameters: Parameters) {
     let timeout = Arc::new(Mutex::new(false));
     let timeout_clone = timeout.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(u64::from(parameters.timeout.unwrap())));
+        std::thread::sleep(std::time::Duration::from_secs(u64::from(parameters.timeout)));
         *timeout_clone.lock().unwrap() = true;
     });
 

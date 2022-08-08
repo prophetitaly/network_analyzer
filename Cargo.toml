@@ -14,6 +14,7 @@ chrono = "0.4.20"
 num-traits = "0.2.15"
 threadpool = "1.8.1"
 num_cpus = "1.13.1"
+clap = {version="3.2.16",features = [ "derive" ]}
 
 [[bin]]
 name = "sample_app"
