@@ -1,5 +1,5 @@
 use std::fmt;
-use std::fmt::{Display, Pointer};
+use std::fmt::{Display};
 use crate::packet::Packet;
 
 #[derive(Default, Debug, Clone)]
@@ -47,12 +47,10 @@ impl Report {
 
         //TODO: optimize this Uso una hashmap o simile. Ordino gli indirizzi per minore e maggiore come destination e source. Indirizzo = chiave hashmap.
         for mut rl in report_lines{
-            if rl.source_optional_port.eq_ignore_ascii_case(&*(addr1)) && rl.destination_optional_port.eq_ignore_ascii_case(&*(addr2)){
-                rl.set_source_optional_port(addr1.clone());
-                rl.set_destination_optional_port(addr2.clone());
-            } else if rl.destination_optional_port.eq_ignore_ascii_case(&*(addr1)) && rl.source_optional_port.eq_ignore_ascii_case(&*(addr2)){
-                rl.set_destination_optional_port(addr1.clone());
-                rl.set_source_optional_port(addr2.clone());
+            if rl.source_optional_port.eq(&*(addr1)) && rl.destination_optional_port.eq(&*(addr2)){
+                rl.add_packet(packet.clone());
+            } else if rl.destination_optional_port.eq(&*(addr1)) && rl.source_optional_port.eq(&*(addr2)){
+                rl.add_packet(packet.clone());
             } else {
                 let mut report_line = ReportLine::default();
                 report_line.set_timestamp_first(packet.get_timestamp().clone());
@@ -109,8 +107,10 @@ impl ReportLine {
             self.protocols.push(packet.get_protocol().clone());
         }
         self.bytes_total += packet.get_length();
-        if self.timestamp_last > *packet.get_timestamp() {
+        if self.timestamp_last < *packet.get_timestamp() {
             self.timestamp_last = packet.get_timestamp().clone();
+        } else if self.timestamp_first < *packet.get_timestamp(){
+            self.timestamp_first = packet.get_timestamp().clone();
         }
     }
 }
