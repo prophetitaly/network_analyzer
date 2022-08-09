@@ -127,6 +127,25 @@ impl ReportLine {
             self.timestamp_first = packet.get_timestamp().clone();
         }
     }
+    pub fn to_string(&self) -> String {
+        let mut s = String::new();
+        s.push_str(&self.timestamp_first);
+        s.push_str(" ");
+        s.push_str(&self.timestamp_last);
+        s.push_str(" ");
+        s.push_str(&self.source_optional_port);
+        s.push_str(" ");
+        s.push_str(&self.destination_optional_port);
+        s.push_str(" ");
+        for protocol in self.protocols.iter() {
+            s.push_str(protocol);
+            s.push_str(", ");
+        }
+        s.push_str(&self.bytes_total.to_string());
+        //TODO: remove println!
+        println!("{}", s);
+        s
+    }
 }
 
 impl Display for ReportLine {
