@@ -2,6 +2,7 @@ mod packet;
 pub mod parameters;
 mod report;
 
+use std::fs;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use etherparse::InternetSlice::{Ipv4, Ipv6};
@@ -86,7 +87,12 @@ fn read_packets(mut capture: Capture<Active>, parameters: Parameters) {
         };
     };
     pool.join();
-    println!("{}", report.lock().unwrap());
+    // println!("{}", report.lock().unwrap());
+    let report_string = report.lock().unwrap().get_report_lines().iter()
+        .map(|x| x.1.iter()
+            .map(|y| y.1.to_string()).collect::<Vec<String>>().join("\n"))
+        .collect::<Vec<String>>().join("\n");
+    fs::write(parameters.file_path, report_string).expect("Wrong output file path!");
 }
 
 fn fill_ip_address(packet: &SlicedPacket, dest_packet: &mut MyPacket) {
