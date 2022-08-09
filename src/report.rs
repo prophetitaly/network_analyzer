@@ -122,7 +122,7 @@ impl ReportLine {
         self.bytes_total += packet.get_length();
         if self.timestamp_last < *packet.get_timestamp() {
             self.timestamp_last = packet.get_timestamp().clone();
-        } else if self.timestamp_first < *packet.get_timestamp() {
+        } else if self.timestamp_first > *packet.get_timestamp() {
             self.timestamp_first = packet.get_timestamp().clone();
         }
     }
