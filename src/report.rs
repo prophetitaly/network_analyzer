@@ -142,8 +142,6 @@ impl ReportLine {
             s.push_str(", ");
         }
         s.push_str(&self.bytes_total.to_string());
-        //TODO: remove println!
-        println!("{}", s);
         s
     }
 }
