@@ -92,7 +92,8 @@ fn read_packets(mut capture: Capture<Active>, parameters: Parameters) {
         .map(|x| x.1.iter()
             .map(|y| y.1.to_string()).collect::<Vec<String>>().join("\n"))
         .collect::<Vec<String>>().join("\n");
-    fs::write(parameters.file_path, report_string).expect("Wrong output file path!");
+    let formatted_report = "Timestamp first   Timestamp last    Address 1                                 Address 2                                 Protocols                              Total tx size in Bytes        \n";
+    fs::write(parameters.file_path, formatted_report.to_string() + &report_string).expect("Wrong output file path!");
 }
 
 fn fill_ip_address(packet: &SlicedPacket, dest_packet: &mut MyPacket) {
@@ -102,14 +103,14 @@ fn fill_ip_address(packet: &SlicedPacket, dest_packet: &mut MyPacket) {
             dest_packet.set_destination(String::from(header.to_header().destination.map(|it| { it.to_string() }).to_vec().join(".")));
         }
         Some(Ipv6(header, ..)) => {
-            dest_packet.set_source(to_hex_string(header.to_header().source.to_vec()));
-            dest_packet.set_destination(to_hex_string(header.to_header().destination.to_vec()));
+            dest_packet.set_source(to_hex_string(4,header.to_header().source.to_vec()));
+            dest_packet.set_destination(to_hex_string(4,header.to_header().destination.to_vec()));
         }
         None => {
             match &packet.link {
                 Some(Ethernet2(header, ..)) => {
-                    dest_packet.set_source(to_hex_string(header.to_header().source.to_vec()));
-                    dest_packet.set_destination(to_hex_string(header.to_header().destination.to_vec()));
+                    dest_packet.set_source(to_hex_string(2,header.to_header().source.to_vec()));
+                    dest_packet.set_destination(to_hex_string(2,header.to_header().destination.to_vec()));
 
                     //ether type match
                     let ethertype = match header.ether_type() {
@@ -183,11 +184,11 @@ fn fill_timestamp_and_lenght(packet: &PacketHeader, dest_packet: &mut MyPacket) 
     }
 }
 
-fn to_hex_string(address: Vec<u8>) -> String {
+fn to_hex_string(group_size: usize, address: Vec<u8>) -> String {
     hex::encode_upper(address)
         .chars()
         .collect::<Vec<char>>()
-        .chunks(2)
+        .chunks(group_size)
         .map(|c| c.iter().collect::<String>())
         .collect::<Vec<String>>()
         .join(":")

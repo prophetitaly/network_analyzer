@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::{fmt, mem};
-use std::borrow::BorrowMut;
 use std::fmt::{Display};
 use crate::packet::Packet;
 
