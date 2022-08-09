@@ -1,10 +1,14 @@
-use std::fmt;
+use std::collections::HashMap;
+use std::{fmt, mem};
+use std::borrow::BorrowMut;
 use std::fmt::{Display};
 use crate::packet::Packet;
 
 #[derive(Default, Debug, Clone)]
 pub struct Report {
-    pub report_lines: Vec<ReportLine>,
+    pub report_lines: HashMap<String, HashMap<String, ReportLine>>,
+    //TODO: vede quale versione è meglio
+    //pub report_lines_v2: HashMap<(String, String),ReportLine>,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -20,55 +24,65 @@ pub struct ReportLine {
 impl Report {
     pub fn new() -> Self {
         Report {
-            report_lines: Vec::new(),
+            report_lines: HashMap::new(),
         }
     }
-    pub fn add_report_line(&mut self, report_line: ReportLine) {
-        self.report_lines.push(report_line);
-    }
-    pub fn get_report_lines(&self) -> &Vec<ReportLine> {
-        &self.report_lines
+    pub fn get_report_lines(&mut self) -> &mut HashMap<String, HashMap<String, ReportLine>> {
+        &mut self.report_lines
     }
     pub fn add_packet(&mut self, packet: Packet) {
-        let addr1 = packet.get_source().clone() + ":" + packet.get_source_port();
-        let addr2 = packet.get_destination().clone() + ":" + packet.get_destination_port();
-        let report_lines = self.get_report_lines().clone();
+        let mut addr1 = packet.get_source().clone() + ":" + packet.get_source_port();
+        let mut addr2 = packet.get_destination().clone() + ":" + packet.get_destination_port();
+        if addr1 > addr2 {
+            mem::swap(&mut addr1, &mut addr2);
+        }
+        let mut report_lines = self.get_report_lines();
 
-        if report_lines.is_empty() {
-            let mut report_line = ReportLine::default();
-            report_line.set_timestamp_first(packet.get_timestamp().clone());
-            report_line.set_timestamp_last(packet.get_timestamp().clone());
-            report_line.set_source_optional_port(packet.get_source().clone() + ":" + packet.get_source_port());
-            report_line.set_destination_optional_port(packet.get_destination().clone() + ":" + packet.get_destination_port());
-            report_line.add_protocol(packet.get_protocol().clone());
-            report_line.set_bytes_total(packet.get_length().clone());
-            self.add_report_line(report_line);
+        if report_lines.get(&addr1).is_none() {
+            report_lines.insert(addr1.clone(), HashMap::new());
         }
 
-        //TODO: optimize this Uso una hashmap o simile. Ordino gli indirizzi per minore e maggiore come destination e source. Indirizzo = chiave hashmap.
-        for mut rl in report_lines{
-            if rl.source_optional_port.eq(&*(addr1)) && rl.destination_optional_port.eq(&*(addr2)){
-                rl.add_packet(packet.clone());
-            } else if rl.destination_optional_port.eq(&*(addr1)) && rl.source_optional_port.eq(&*(addr2)){
-                rl.add_packet(packet.clone());
-            } else {
-                let mut report_line = ReportLine::default();
-                report_line.set_timestamp_first(packet.get_timestamp().clone());
-                report_line.set_timestamp_last(packet.get_timestamp().clone());
-                report_line.set_source_optional_port(packet.get_source().clone() + ":" + packet.get_source_port());
-                report_line.set_destination_optional_port(packet.get_destination().clone() + ":" + packet.get_destination_port());
-                report_line.add_protocol(packet.get_protocol().clone());
-                report_line.set_bytes_total(packet.get_length().clone());
-                self.add_report_line(report_line);
-            }
+        let report_line_collection = report_lines.get_mut(&addr1).unwrap();
+
+        if report_line_collection.get(&addr2).is_none() {
+            let mut rl = ReportLine::default();
+            rl.set_timestamp_first(packet.get_timestamp().clone());
+            rl.set_timestamp_last(packet.get_timestamp().clone());
+            rl.set_source_optional_port(packet.get_source().clone() + ":" + packet.get_source_port());
+            rl.set_destination_optional_port(packet.get_destination().clone() + ":" + packet.get_destination_port());
+            rl.add_protocol(packet.get_protocol().clone());
+            rl.set_bytes_total(packet.get_length().clone());
+            report_line_collection.insert(addr2, rl);
+        } else {
+            report_line_collection.get_mut(&addr2).unwrap().add_packet(packet.clone());
         }
+
+        // //TODO: optimize this Uso una hashmap o simile. Ordino gli indirizzi per minore e maggiore come destination e source. Indirizzo = chiave hashmap.
+        // for mut rl in report_lines{
+        //     if rl.source_optional_port.eq(&*(addr1)) && rl.destination_optional_port.eq(&*(addr2)){
+        //         rl.add_packet(packet.clone());
+        //     } else if rl.destination_optional_port.eq(&*(addr1)) && rl.source_optional_port.eq(&*(addr2)){
+        //         rl.add_packet(packet.clone());
+        //     } else {
+        //         let mut report_line = ReportLine::default();
+        //         report_line.set_timestamp_first(packet.get_timestamp().clone());
+        //         report_line.set_timestamp_last(packet.get_timestamp().clone());
+        //         report_line.set_source_optional_port(packet.get_source().clone() + ":" + packet.get_source_port());
+        //         report_line.set_destination_optional_port(packet.get_destination().clone() + ":" + packet.get_destination_port());
+        //         report_line.add_protocol(packet.get_protocol().clone());
+        //         report_line.set_bytes_total(packet.get_length().clone());
+        //         self.add_report_line(report_line);
+        //     }
+        // }
     }
 }
 
 impl Display for Report {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.report_lines.iter().fold(Ok(()), |result, rl| {
-            result.and_then(|_| writeln!(f, "{}", rl))
+        self.report_lines.iter().fold(Ok(()), |result, rls| {
+            rls.1.iter().fold(Ok(()), |result, rl| {
+                result.and_then(|_| writeln!(f, "{}", rl.1))
+            })
         })
     }
 }
@@ -109,7 +123,7 @@ impl ReportLine {
         self.bytes_total += packet.get_length();
         if self.timestamp_last < *packet.get_timestamp() {
             self.timestamp_last = packet.get_timestamp().clone();
-        } else if self.timestamp_first < *packet.get_timestamp(){
+        } else if self.timestamp_first < *packet.get_timestamp() {
             self.timestamp_first = packet.get_timestamp().clone();
         }
     }
