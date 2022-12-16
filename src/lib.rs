@@ -4,7 +4,7 @@ mod report;
 
 use std::fs;
 use std::ops::Deref;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use etherparse::InternetSlice::{Ipv4, Ipv6};
 use etherparse::{SlicedPacket};
 use etherparse::LinkSlice::Ethernet2;
@@ -15,6 +15,57 @@ use crate::packet::Packet as MyPacket;
 use crate::parameters::Parameters;
 use crate::report::Report;
 
+#[derive(Eq, PartialEq, Clone)]
+pub enum CaptureState {
+    Capturing(),
+    Paused(),
+    Stopped(),
+}
+
+pub struct ControlBlock {
+    m: Mutex<CaptureState>,
+    cv: Condvar,
+}
+
+impl ControlBlock {
+    pub fn new() -> Arc<ControlBlock> {
+        Arc::new(ControlBlock {
+            m: Mutex::new(CaptureState::Capturing()),
+            cv: Condvar::new(),
+        })
+    }
+
+    pub fn get_state(&self) -> CaptureState {
+        let state = self.m.lock().unwrap();
+        state.clone()
+    }
+
+    pub fn pause(&self) {
+        let mut state = self.m.lock().unwrap();
+        *state = CaptureState::Paused();
+        self.cv.notify_all();
+    }
+
+    pub fn resume(&self) {
+        let mut state = self.m.lock().unwrap();
+        *state = CaptureState::Capturing();
+        self.cv.notify_all();
+    }
+
+    pub fn stop(&self) {
+        let mut state = self.m.lock().unwrap();
+        *state = CaptureState::Stopped();
+        self.cv.notify_all();
+    }
+
+    pub fn wait(&self) {
+        let mut state = self.m.lock().unwrap();
+        while *state == CaptureState::Paused() {
+            state = self.cv.wait(state).unwrap();
+        }
+    }
+}
+
 pub fn get_devices() -> Vec<(String, Vec<Address>)> {
     let devices = Device::list().unwrap();
     let mut device_names: Vec<(String, Vec<Address>)> = Vec::new();
@@ -24,13 +75,15 @@ pub fn get_devices() -> Vec<(String, Vec<Address>)> {
     device_names
 }
 
-pub fn analyze_network(parameters: Parameters) {
+//TODO: Scrivere tutte le funzioni come Result<T, E>
+pub fn analyze_network(parameters: Parameters) -> Arc<ControlBlock> {
     let device_id = parameters.device_id;
     let main_device = Device::list().unwrap();
     let device = main_device.get(device_id).unwrap().clone();
     let mut cap = Capture::from_device(device).unwrap()
         .promisc(true)
         .snaplen(5000)
+        .timeout(1000)
         .open()
         .unwrap();
 
@@ -40,70 +93,91 @@ pub fn analyze_network(parameters: Parameters) {
             .expect("Filters invalid, please check the documentation.");
     }
 
-    read_packets(cap, parameters);
+    let control_block = ControlBlock::new();
+    let control_block_clone = control_block.clone();
+    std::thread::spawn(move || {
+        read_packets(cap, parameters, control_block_clone);
+    });
+    control_block
 }
 
-fn read_packets(mut capture: Capture<Active>, parameters: Parameters) {
+fn read_packets(mut capture: Capture<Active>, parameters: Parameters, control_block: Arc<ControlBlock>) {
     let report = Arc::new(Mutex::new(Report::default()));
 
     //create a thread pool to handle the packets
     let pool = ThreadPool::new(num_cpus::get());
 
-    //start a timer that changer a variable to true when the timeout is reached
-    let timeout = Arc::new(Mutex::new(false));
-    let timeout_clone = timeout.clone();
     let report_clone_out = report.clone();
 
+    let control_block_clone = control_block.clone();
     std::thread::spawn(move || {
         loop {
             std::thread::sleep(std::time::Duration::from_secs(u64::from(parameters.timeout)));
-            // *timeout_clone.lock().unwrap() = true;
-            let report_string = report_clone_out.lock().unwrap().clone().get_report_lines().iter()
-                .fold(String::new(), |result, rls| {
-                    result + "\n" + &rls.1.to_string()});
-                // .collect::<Vec<String>>().join("\n");
-            let formatted_report = "Timestamp first   Timestamp last    Address 1                                 Address 2                                 Protocols                              Total tx size in Bytes        \n";
-            fs::write(&parameters.file_path, formatted_report.to_string() + &report_string).expect("Wrong output file path!");
+            match control_block_clone.get_state() {
+                CaptureState::Stopped() => (),
+                CaptureState::Paused() => {
+                    control_block_clone.wait();
+                    continue;
+                },
+                CaptureState::Capturing() => {
+                    let report_string = report_clone_out.lock().unwrap().clone().get_report_lines().iter()
+                        .fold(String::new(), |result, rls| {
+                            result + "\n" + &rls.1.to_string()
+                        });
+                    // .collect::<Vec<String>>().join("\n");
+                    let formatted_report = "Timestamp first   Timestamp last    Address 1                                 Address 2                                 Protocols                              Total tx size in Bytes        \n";
+                    fs::write(&parameters.file_path, formatted_report.to_string() + &report_string).expect("Wrong output file path!");
+                }
+            }
         }
     });
 
-    while !timeout.lock().unwrap().deref() {
+    loop {
         //TODO: se non arrivano pacchetti e il timer scatta, il thread rimane comunque
         // bloccato finchè arriva almeno un pacchetto a causa di capture.next() #risolvere
         // possibile soluzione: usare .timeout() su capture
 
-
-        match capture.next() {
-            Ok(packet) => {
-                let packet_data = packet.data.to_owned();
-                let packet_header = packet.header.to_owned();
-                let report_copy = report.clone();
-                pool.execute(move || {
-                    match SlicedPacket::from_ethernet(&*packet_data) {
-                        Err(..) => {}
-                        Ok(sliced_packet) => {
-                            let mut result = MyPacket::new(Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default());
-                            fill_timestamp_and_lenght(&packet_header, &mut result);
-                            fill_ip_address(&sliced_packet, &mut result);
-                            fill_protocol_and_ports(&sliced_packet, &mut result);
-                            // println!("{:?}", result);
-                            report_copy.lock().unwrap().add_packet(result);
-                        }
-                    }
-                });
+        match control_block.get_state() {
+            CaptureState::Stopped() => break,
+            CaptureState::Paused() => {
+                control_block.wait();
+                continue;
             }
-            Err(..) => {}
-        };
-    };
-    pool.join();
-    // println!("{}", report.lock().unwrap());
+            CaptureState::Capturing() => {
+                match capture.next_packet() {
+                    Ok(packet) => {
+                        //recheck the state of the capture and discard data if it has come after it was paused or stopped
+                        match control_block.get_state() {
+                            CaptureState::Stopped() => (),
+                            CaptureState::Paused() => (),
+                            CaptureState::Capturing() => {
+                                let packet_data = packet.data.to_owned();
+                                let packet_header = packet.header.to_owned();
+                                let report_copy = report.clone();
+                                pool.execute(move || {
+                                    match SlicedPacket::from_ethernet(&*packet_data) {
+                                        Err(..) => {}
+                                        Ok(sliced_packet) => {
+                                            let mut result = MyPacket::new(Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default());
+                                            fill_timestamp_and_lenght(&packet_header, &mut result);
+                                            fill_ip_address(&sliced_packet, &mut result);
+                                            fill_protocol_and_ports(&sliced_packet, &mut result);
+                                            // println!("{:?}", result);
+                                            report_copy.lock().unwrap().add_packet(result);
+                                        }
+                                    }
+                                });
+                            }
+                        }
+                    },
+                    Err(..) => {}
+                }
+            },
+        }
 
-    // let report_string = report.lock().unwrap().get_report_lines().iter()
-    //     .map(|x| x.1.iter()
-    //         .map(|y| y.1.to_string()).collect::<Vec<String>>().join("\n"))
-    //     .collect::<Vec<String>>().join("\n");
-    // let formatted_report = "Timestamp first   Timestamp last    Address 1                                 Address 2                                 Protocols                              Total tx size in Bytes        \n";
-    // fs::write(parameters.file_path, formatted_report.to_string() + &report_string).expect("Wrong output file path!");
+    };
+
+    pool.join();
 }
 
 fn fill_ip_address(packet: &SlicedPacket, dest_packet: &mut MyPacket) {

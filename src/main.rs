@@ -1,3 +1,4 @@
+use std::io;
 use network_analyzer::{analyze_network, get_devices};
 use network_analyzer::parameters::Parameters;
 
@@ -56,12 +57,33 @@ fn main() {
             }
         }
         Options::Parse(parse_command) => {
-            analyze_network(Parameters {
+            let cb = analyze_network(Parameters {
                 device_id: parse_command.device_id - 1,
                 timeout: parse_command.timeout,
                 file_path: parse_command.output,
                 filter: parse_command.filter,
             });
+            loop {
+                println!("\nScrivi: \n - \"pause\" per fermare l'analisi \n - \"resume\" per riprendere l'analisi \n - \"exit\" per uscire");
+                let mut input = String::new();
+                io::stdin().read_line(&mut input).expect("Failed to read line");
+                match input.trim() {
+                    "pause" => {
+                        cb.pause();
+                        println!("Analisi in pausa");
+                    }
+                    "resume" => {
+                        cb.resume();
+                        println!("Analisi ripresa");
+                    }
+                    "exit" => {
+                        break;
+                    }
+                    _ => {
+                        println!("Comando non riconosciuto");
+                    }
+                }
+            }
         }
     }
 }
