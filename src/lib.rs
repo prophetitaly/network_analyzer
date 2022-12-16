@@ -59,9 +59,9 @@ fn read_packets(mut capture: Capture<Active>, parameters: Parameters) {
             std::thread::sleep(std::time::Duration::from_secs(u64::from(parameters.timeout)));
             // *timeout_clone.lock().unwrap() = true;
             let report_string = report_clone_out.lock().unwrap().clone().get_report_lines().iter()
-                .map(|x| x.1.iter()
-                    .map(|y| y.1.to_string()).collect::<Vec<String>>().join("\n"))
-                .collect::<Vec<String>>().join("\n");
+                .fold(String::new(), |result, rls| {
+                    result + "\n" + &rls.1.to_string()});
+                // .collect::<Vec<String>>().join("\n");
             let formatted_report = "Timestamp first   Timestamp last    Address 1                                 Address 2                                 Protocols                              Total tx size in Bytes        \n";
             fs::write(&parameters.file_path, formatted_report.to_string() + &report_string).expect("Wrong output file path!");
         }
