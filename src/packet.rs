@@ -30,8 +30,8 @@ impl Packet {
     }
 
     pub fn set_timestamp(&mut self, timestamp: &c_long, timestamp_ns: &c_long) {
-        let ts = i64::from_i32(*timestamp).unwrap();
-        let ts_ns = u32::from_i32(*timestamp_ns).unwrap();
+        let ts = i64::from_i64(*timestamp).unwrap();
+        let ts_ns = u32::from_i64(*timestamp_ns).unwrap();
         // Create a NaiveDateTime from the timestamp
         let naive = NaiveDateTime::from_timestamp(ts, ts_ns*1000);
 

@@ -70,7 +70,12 @@ pub fn get_devices() -> Vec<(String, Vec<Address>)> {
     let devices = Device::list().unwrap();
     let mut device_names: Vec<(String, Vec<Address>)> = Vec::new();
     for device in devices {
-        device_names.push((device.desc.unwrap().to_string(), device.addresses));
+        if device.desc.is_some() {
+            device_names.push((device.desc.unwrap().to_string(), device.addresses));
+        }
+        else {
+            device_names.push((device.name.to_string(), device.addresses));
+        }
     }
     device_names
 }
@@ -86,6 +91,7 @@ pub fn analyze_network(parameters: Parameters) -> Arc<ControlBlock> {
         .timeout(1000)
         .open()
         .unwrap();
+    //TODO: inserire errore se il dispositivo è sbagliato
 
     if let Some(filter) = &parameters.filter {
         cap
@@ -118,7 +124,7 @@ fn read_packets(mut capture: Capture<Active>, parameters: Parameters, control_bl
                 CaptureState::Paused() => {
                     control_block_clone.wait();
                     continue;
-                },
+                }
                 CaptureState::Capturing() => {
                     let report_string = report_clone_out.lock().unwrap().clone().get_report_lines().iter()
                         .fold(String::new(), |result, rls| {
@@ -169,12 +175,11 @@ fn read_packets(mut capture: Capture<Active>, parameters: Parameters, control_bl
                                 });
                             }
                         }
-                    },
+                    }
                     Err(..) => {}
                 }
-            },
+            }
         }
-
     };
 
     pool.join();
