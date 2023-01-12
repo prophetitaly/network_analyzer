@@ -5,8 +5,7 @@ use crate::packet::Packet;
 
 #[derive(Default, Debug, Clone)]
 pub struct Report {
-    // pub report_lines: HashMap<String, HashMap<String, ReportLine>>,
-    //TODO: vede quale versione è meglio
+    // pub report_lines: HashMap<String, HashMap<String, ReportLine>>
     pub report_lines: HashMap<(String, String),ReportLine>,
 }
 

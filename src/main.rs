@@ -52,17 +52,27 @@ fn main() {
     let args = NetworkAnalyzer::parse();
     match args.subcommand {
         Options::Devices(_devices) => {
-            for d in get_devices().iter().enumerate() {
+            let devices = get_devices();
+            if devices.is_err() {
+                println!("Error: {}", devices.err().unwrap());
+                return;
+            }
+            for d in devices.unwrap().iter().enumerate() {
                 println!("{}) {} {:?}", d.0 + 1, d.1.0, d.1.1);
             }
         }
         Options::Parse(parse_command) => {
-            let cb = analyze_network(Parameters {
+            let cb_result = analyze_network(Parameters {
                 device_id: parse_command.device_id - 1,
                 timeout: parse_command.timeout,
                 file_path: parse_command.output,
                 filter: parse_command.filter,
             });
+            if cb_result.is_err() {
+                println!("Error: {}", cb_result.err().unwrap());
+                return;
+            }
+            let cb = cb_result.unwrap();
             loop {
                 println!("\nScrivi: \n - \"pause\" per fermare l'analisi \n - \"resume\" per riprendere l'analisi \n - \"exit\" per uscire");
                 let mut input = String::new();

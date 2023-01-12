@@ -1,7 +1,28 @@
+//! Simple packet capture and analysis tool
+//!
+//! # Input
+//! The input is a Parameters struct that contains the following information:
+//! * device_id: The id of the network device to capture from
+//! * timeout: The time after which the capture stops
+//! * file_path: The path of the file where the captured packets will be saved
+//! * filter: An optional filter to be applied to the captured packets (in BPF format)
+//!
+//! # Output
+//! The output is written to a file in the following format:
+//! Timestamp first | Timestamp last | Address 1 | Address 2 | Protocols Total tx size in Bytes
+//!
+//! # Usage
+//! let control_block = analyze_network(Parameters {
+//!                 device_id: 1,
+//!                 timeout: 1,
+//!                 file_path: output.txt,
+//!                 filter: None,
+//!             });
 mod packet;
 pub mod parameters;
 mod report;
 
+use std::fmt::Error;
 use std::fs;
 use std::ops::Deref;
 use std::sync::{Arc, Condvar, Mutex};
@@ -16,49 +37,62 @@ use crate::parameters::Parameters;
 use crate::report::Report;
 
 #[derive(Eq, PartialEq, Clone)]
+/// There are 3 possible states:
+/// 1. The capture is running
+/// 2. The capture is paused
+/// 3. The capture is stopped
 pub enum CaptureState {
     Capturing(),
     Paused(),
     Stopped(),
 }
 
+/// Controls the capture process.
 pub struct ControlBlock {
     m: Mutex<CaptureState>,
     cv: Condvar,
 }
 
 impl ControlBlock {
-    pub fn new() -> Arc<ControlBlock> {
+    fn new() -> Arc<ControlBlock> {
         Arc::new(ControlBlock {
             m: Mutex::new(CaptureState::Capturing()),
             cv: Condvar::new(),
         })
     }
 
+    /// Gets the current state of the capture.
+    ///
+    /// There are 2 states:
+    /// - Capturing
+    /// - Paused
     pub fn get_state(&self) -> CaptureState {
         let state = self.m.lock().unwrap();
         state.clone()
     }
 
+    /// Pauses the capture.
     pub fn pause(&self) {
         let mut state = self.m.lock().unwrap();
         *state = CaptureState::Paused();
         self.cv.notify_all();
     }
 
+    /// Resumes the capture.
     pub fn resume(&self) {
         let mut state = self.m.lock().unwrap();
         *state = CaptureState::Capturing();
         self.cv.notify_all();
     }
 
+    /// Stops the capture.
     pub fn stop(&self) {
         let mut state = self.m.lock().unwrap();
         *state = CaptureState::Stopped();
         self.cv.notify_all();
     }
 
-    pub fn wait(&self) {
+    fn wait(&self) {
         let mut state = self.m.lock().unwrap();
         while *state == CaptureState::Paused() {
             state = self.cv.wait(state).unwrap();
@@ -66,22 +100,35 @@ impl ControlBlock {
     }
 }
 
-pub fn get_devices() -> Vec<(String, Vec<Address>)> {
-    let devices = Device::list().unwrap();
+/// Gets the list of network interfaces with their addresses.
+///
+/// ## Example
+///
+/// Microsoft Interface: [Address { addr: 192.168.56.1, netmask: Some(255.255.255.0), broadcast_addr: Some(255.255.255.255), dst_addr: None }]
+pub fn get_devices() -> Result<Vec<(String, Vec<Address>)>, pcap::Error> {
+    let devices_list = Device::list();
+    if devices_list.is_err() {
+        return Err(devices_list.err().unwrap());
+    }
+    let mut devices = devices_list.unwrap();
     let mut device_names: Vec<(String, Vec<Address>)> = Vec::new();
     for device in devices {
         if device.desc.is_some() {
             device_names.push((device.desc.unwrap().to_string(), device.addresses));
-        }
-        else {
+        } else {
             device_names.push((device.name.to_string(), device.addresses));
         }
     }
-    device_names
+    Ok(device_names)
 }
 
-//TODO: Scrivere tutte le funzioni come Result<T, E>
-pub fn analyze_network(parameters: Parameters) -> Arc<ControlBlock> {
+/// Begins the capture process and returns a control block for the capture.
+/// The input is a Parameters struct that contains the following information:
+/// * device_id: The id of the network device to capture from
+/// * timeout: The time after which the capture stops
+/// * file_path: The path of the file where the captured packets will be saved
+/// * filter: An optional filter to be applied to the captured packets (in BPF format)
+pub fn analyze_network(parameters: Parameters) -> Result<Arc<ControlBlock>, Error> {
     let device_id = parameters.device_id;
     let main_device = Device::list().unwrap();
     let device = main_device.get(device_id).unwrap().clone();
@@ -104,7 +151,7 @@ pub fn analyze_network(parameters: Parameters) -> Arc<ControlBlock> {
     std::thread::spawn(move || {
         read_packets(cap, parameters, control_block_clone);
     });
-    control_block
+    Ok(control_block)
 }
 
 fn read_packets(mut capture: Capture<Active>, parameters: Parameters, control_block: Arc<ControlBlock>) {
@@ -139,10 +186,6 @@ fn read_packets(mut capture: Capture<Active>, parameters: Parameters, control_bl
     });
 
     loop {
-        //TODO: se non arrivano pacchetti e il timer scatta, il thread rimane comunque
-        // bloccato finchè arriva almeno un pacchetto a causa di capture.next() #risolvere
-        // possibile soluzione: usare .timeout() su capture
-
         match control_block.get_state() {
             CaptureState::Stopped() => break,
             CaptureState::Paused() => {
