@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::{fmt, mem};
 use std::fmt::{Display};
+use prettytable::{row, Table};
 use crate::packet::Packet;
 
 #[derive(Default, Debug, Clone)]
@@ -49,6 +50,15 @@ impl Report {
         } else {
             report_lines.get_mut(&key).unwrap().add_packet(packet.clone());
         }
+    }
+
+    pub fn to_formatted_table(&self) -> Table {
+        let mut table = Table::new();
+        table.add_row(row!["First Timestamp", "Last Timestamp", "Address 1", "Address 2", "Protocols", "Bytes Total"]);
+        for (_, rls) in self.report_lines.iter() {
+            table.add_row(row![rls.timestamp_first, rls.timestamp_last, rls.source_optional_port, rls.destination_optional_port, rls.protocols.join(","), rls.bytes_total]);
+        }
+        table
     }
 }
 
