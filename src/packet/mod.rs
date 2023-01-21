@@ -44,9 +44,10 @@ impl Packet {
 
         // Create a normal DateTime from the NaiveDateTime
         let datetime: DateTime<Utc> = DateTime::from_utc(naive, Utc);
+        let datetime_local = datetime.with_timezone(&chrono::Local);
 
         // Format the datetime how you want
-        let newdate = datetime.format("%H:%M:%S%.3f");
+        let newdate = datetime_local.format("%H:%M:%S%.3f");
         self.timestamp = newdate.to_string();
     }
 
