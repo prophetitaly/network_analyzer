@@ -173,13 +173,6 @@ fn read_packets(mut capture: Capture<Active>, parameters: Parameters, control_bl
                     continue;
                 }
                 CaptureState::Capturing() => {
-                    // let report_string = report_clone_out.lock().unwrap().clone().get_report_lines().iter()
-                    //     .fold(String::new(), |result, rls| {
-                    //         result + "\n" + &rls.1.to_string()
-                    //     });
-                    // // .collect::<Vec<String>>().join("\n");
-                    // let formatted_report = "Timestamp first   Timestamp last    Address 1                                 Address 2                                 Protocols                              Total tx size in Bytes        \n";
-                    // fs::write(&parameters.file_path, formatted_report.to_string() + &report_string).expect("Wrong output file path!");
                     fs::write(&parameters.file_path, report_clone_out.lock().unwrap().to_formatted_table().to_string()).expect("Wrong output file path!");
                 }
             }
@@ -208,7 +201,7 @@ fn read_packets(mut capture: Capture<Active>, parameters: Parameters, control_bl
                                     match SlicedPacket::from_ethernet(&*packet_data) {
                                         Err(..) => {}
                                         Ok(sliced_packet) => {
-                                            let mut result = MyPacket::new(Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default(), Default::default());
+                                            let mut result = MyPacket::new(Default::default(), Default::default(), Default::default(), None, None, Default::default(), Default::default(), Default::default());
                                             fill_timestamp_and_lenght(&packet_header, &mut result);
                                             fill_ip_address(&sliced_packet, &mut result);
                                             fill_protocol_and_ports(&sliced_packet, &mut result);
@@ -282,13 +275,13 @@ fn fill_protocol_and_ports(packet: &SlicedPacket, dest_packet: &mut MyPacket) {
             match val {
                 Udp(header_slice) => {
                     dest_packet.set_protocol(String::from("UDP"));
-                    dest_packet.set_source_port(header_slice.to_header().source_port.to_string());
-                    dest_packet.set_destination_port(header_slice.to_header().destination_port.to_string());
+                    dest_packet.set_source_port(Some(header_slice.to_header().source_port.to_string()));
+                    dest_packet.set_destination_port(Some(header_slice.to_header().destination_port.to_string()));
                 }
                 Tcp(header_slice) => {
                     dest_packet.set_protocol(String::from("TCP"));
-                    dest_packet.set_source_port(header_slice.to_header().source_port.to_string());
-                    dest_packet.set_destination_port(header_slice.to_header().destination_port.to_string());
+                    dest_packet.set_source_port(Some(header_slice.to_header().source_port.to_string()));
+                    dest_packet.set_destination_port(Some(header_slice.to_header().destination_port.to_string()));
                 }
                 Icmpv4(..) => {
                     dest_packet.set_protocol(String::from("ICMPv4"));

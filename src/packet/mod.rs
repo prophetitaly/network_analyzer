@@ -8,15 +8,15 @@ pub struct Packet {
     timestamp: String,
     source: String,
     destination: String,
-    source_port: String,
-    destination_port: String,
+    source_port: Option<String>,
+    destination_port: Option<String>,
     protocol: String,
     length: u32,
     info: String,
 }
 
 impl Packet {
-    pub fn new(timestamp: String, source: String, destination: String, source_port: String, destination_port: String, protocol: String, length: u32, info: String) -> Self {
+    pub fn new(timestamp: String, source: String, destination: String, source_port: Option<String>, destination_port: Option<String>, protocol: String, length: u32, info: String) -> Self {
         Packet {
             timestamp,
             source,
@@ -30,8 +30,8 @@ impl Packet {
     }
 
     pub fn set_timestamp(&mut self, timestamp: &c_long, timestamp_ns: &c_long) {
-        let mut ts;
-        let mut ts_ns;
+        let ts;
+        let ts_ns;
         if cfg!(target_os = "linux") {
             ts = i64::from_i64(*timestamp as i64).unwrap();
             ts_ns = u32::from_i64(*timestamp_ns as i64).unwrap();
@@ -57,10 +57,10 @@ impl Packet {
     pub fn set_destination(&mut self, destination: String) {
         self.destination = destination;
     }
-    pub fn set_source_port(&mut self, source_port: String) {
+    pub fn set_source_port(&mut self, source_port: Option<String>) {
         self.source_port = source_port;
     }
-    pub fn set_destination_port(&mut self, destination_port: String) {
+    pub fn set_destination_port(&mut self, destination_port: Option<String>) {
         self.destination_port = destination_port;
     }
     pub fn set_protocol(&mut self, protocol: String) {
@@ -83,10 +83,10 @@ impl Packet {
     pub fn get_destination(&self) -> &String {
         &self.destination
     }
-    pub fn get_source_port(&self) -> &String {
+    pub fn get_source_port(&self) -> &Option<String> {
         &self.source_port
     }
-    pub fn get_destination_port(&self) -> &String {
+    pub fn get_destination_port(&self) -> &Option<String> {
         &self.destination_port
     }
     pub fn get_protocol(&self) -> &String {
@@ -102,6 +102,20 @@ impl Packet {
 
 impl fmt::Display for Packet {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} {} {} {} {} {} {} {}", self.timestamp, self.source, self.destination, self.source_port, self.destination_port, self.protocol, self.length, self.info)
+        write!(f, "{} {} {} {} {} {} {} {}",
+               self.timestamp,
+               self.source,
+               self.destination,
+               match self.source_port {
+                   Some(ref port) => port,
+                   None => "",
+               },
+               match self.destination_port {
+                     Some(ref port) => port,
+                     None => "",
+               },
+               self.protocol,
+               self.length,
+               self.info)
     }
 }

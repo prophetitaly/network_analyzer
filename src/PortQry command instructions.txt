@@ -1,0 +1,8 @@
+Install portqry.exe from Microsoft
+Open a command prompt where portqry has been installed.
+
+To test TCP, use the following command:
+portqry.exe -n 8.8.8.8 -sp 88999 -p tcp
+
+To test UDP, use the following command:
+portqry.exe -n 8.8.8.8 -sp 88999 -p udp

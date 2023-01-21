@@ -7,7 +7,7 @@ use crate::packet::Packet;
 #[derive(Default, Debug, Clone)]
 pub struct Report {
     // pub report_lines: HashMap<String, HashMap<String, ReportLine>>
-    pub report_lines: HashMap<(String, String),ReportLine>,
+    pub report_lines: HashMap<(String, String), ReportLine>,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -26,12 +26,20 @@ impl Report {
             report_lines: HashMap::new(),
         }
     }
-    pub fn get_report_lines(&mut self) -> &mut HashMap<(String, String),ReportLine> {
+    pub fn get_report_lines(&mut self) -> &mut HashMap<(String, String), ReportLine> {
         &mut self.report_lines
     }
     pub fn add_packet(&mut self, packet: Packet) {
-        let mut addr1 = packet.get_source().clone() + ":" + packet.get_source_port();
-        let mut addr2 = packet.get_destination().clone() + ":" + packet.get_destination_port();
+        let mut addr1 = packet.get_source().clone() +
+            &(match packet.get_source_port() {
+                Some(port) => (":".to_owned() + port).to_owned(),
+                None => "".to_owned(),
+            });
+        let mut addr2 = packet.get_destination().clone() +
+            &(match packet.get_destination_port() {
+                Some(port) => (":".to_owned() + port).to_owned(),
+                None => "".to_owned(),
+            });
         if addr1 > addr2 {
             mem::swap(&mut addr1, &mut addr2);
         }
@@ -42,8 +50,16 @@ impl Report {
             let mut rl = ReportLine::default();
             rl.set_timestamp_first(packet.get_timestamp().clone());
             rl.set_timestamp_last(packet.get_timestamp().clone());
-            rl.set_source_optional_port(packet.get_source().clone() + ":" + packet.get_source_port());
-            rl.set_destination_optional_port(packet.get_destination().clone() + ":" + packet.get_destination_port());
+            rl.set_source_optional_port(packet.get_source().clone() +
+                &*match packet.get_source_port() {
+                    Some(port) => ":".to_owned() + port,
+                    None => "".to_owned(),
+                });
+            rl.set_destination_optional_port(packet.get_destination().clone() +
+                &*match packet.get_destination_port() {
+                    Some(port) => ":".to_owned() + port,
+                    None => "".to_owned(),
+                });
             rl.add_protocol(packet.get_protocol().clone());
             rl.set_bytes_total(packet.get_length().clone());
             report_lines.insert(key, rl);
@@ -65,7 +81,7 @@ impl Report {
 impl Display for Report {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.report_lines.iter().fold(Ok(()), |result, rls| {
-                result.and_then(|_| writeln!(f, "{}", rls.1))
+            result.and_then(|_| writeln!(f, "{}", rls.1))
         })
     }
 }
