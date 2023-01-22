@@ -1,5 +1,5 @@
 use std::io;
-use network_analyzer::{analyze_network, ControlBlock, get_devices};
+use network_analyzer::{analyze_network, ControlBlock, get_devices, SnifferError};
 use network_analyzer::parameters::Parameters;
 
 use clap::{Args, Parser, Subcommand};
@@ -105,6 +105,7 @@ fn main() {
                                     cb.set_timeout(timeout);
                                     clear_screen();
                                     println!("Timeout set at {}", timeout);
+                                    break;
                                 }
                                 Err(_) => {
                                     println!("Timeout not valid");
@@ -200,30 +201,34 @@ fn read_input(cb: &ControlBlock, o: bool) -> String {
 }
 
 fn error_handler(cb: &ControlBlock) {
-    loop {
-        if let Some(e) = cb.get_first_error() {
-            clear_screen();
-            println!("An error during the packet capture has occured: {}", e);
-            loop {
-                println!("Would you like to ignore and continue the sniffing process or stop the execution?\n \
+    let e = cb.get_errors();
+    if e.len() > 0 {
+        clear_screen();
+        println!("Some errors has occured:\n");
+        let i = e.len();
+        for err in e.iter() {
+            println!("{}", err);
+        }
+        drop(e);
+        cb.clear_errors(i);
+        loop {
+            println!("Would you like to ignore and continue the sniffing process or stop the execution?\n \
                 - \"continue\" to go on\n \
                 - \"stop\" for stopping the execution \n ");
-                let input = read_input(cb, false);
-                match input.trim() {
-                    "continue" => {
-                        clear_screen();
-                        break;
-                    },
-                    "stop" => unsafe {
-                        cb.stop();
-                        exit(0);
-                    }
-                    _ => {}
+            let input = read_input(cb, false);
+            match input.trim() {
+                "continue" => {
+                    clear_screen();
+                    break;
+                }
+                "stop" => unsafe {
+                    cb.stop();
+                    exit(0);
+                }
+                _ => {
+                    println!("Command not valid");
                 }
             }
-        }
-        else {
-            break;
         }
     }
 }

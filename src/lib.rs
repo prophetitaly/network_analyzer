@@ -274,10 +274,16 @@ impl ControlBlock {
         }
     }
 
-    pub fn get_first_error(&self) -> Option<SnifferError> {
+    pub fn get_errors(&self) -> MutexGuard<'_, VecDeque<SnifferError>> {
+        let e = self.error_list.lock().unwrap();
+        e
+    }
+
+    pub fn clear_errors(&self, size: usize){
         let mut e = self.error_list.lock().unwrap();
-        let error = e.pop_front();
-        error
+        for _ in 0..size {
+            e.pop_front();
+        }
     }
 
     pub fn push_error(&self, error: SnifferError) {
@@ -418,14 +424,15 @@ fn read_packets(control_block: Arc<ControlBlock>) {
                         }
                     }
                     Err(e) => {
-                        match e {
-                            //ignore only the timeout error, I wanted to use a timeout to be able to check the state of the capture
-                            pcap::Error::TimeoutExpired => (),
-                            _ => {
-                                control_block.push_error(SnifferError::CaptureError(CaptureError::CaptureError(e)));
-                                break;
-                            }
-                        }
+                        // match e {
+                        //     //ignore only the timeout error, I wanted to use a timeout to be able to check the state of the capture
+                        //     pcap::Error::TimeoutExpired => (),
+                        //     _ => {
+                        //         control_block.push_error(SnifferError::CaptureError(CaptureError::CaptureError(e)));
+                        //         break;
+                        //     }
+                        // }
+                        control_block.push_error(SnifferError::CaptureError(CaptureError::CaptureError(e)));
                     }
                 }
             }
