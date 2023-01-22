@@ -22,9 +22,9 @@ mod packet;
 pub mod parameters;
 mod report;
 
-use std::fmt::Error;
+use std::fmt::{Display, Error, Formatter};
 use std::fs;
-use std::ops::Deref;
+use std::string::ParseError;
 use std::sync::{Arc, Condvar, Mutex};
 use etherparse::InternetSlice::{Ipv4, Ipv6};
 use etherparse::{SlicedPacket};
@@ -47,11 +47,77 @@ pub enum CaptureState {
     Stopped(),
 }
 
-/// Controls the capture process.
+#[derive(Debug)]
+pub enum SnifferError {
+    ConfigError(ConfigError),
+    CaptureError(CaptureError),
+}
+
+#[derive(Debug)]
+pub enum ConfigError {
+    InvalidDeviceId(ParseError),
+    InvalidTimeout(ParseError),
+    InvalidFilePath(ParseError),
+    InvalidFilter(ParseError),
+}
+
+#[derive(Debug)]
+pub enum CaptureError {
+    DeviceError(pcap::Error),
+    CaptureError(pcap::Error),
+    FilterError(pcap::Error),
+}
+
+/// Controls the capture process
 pub struct ControlBlock {
     m: Mutex<CaptureState>,
     cv: Condvar,
 }
+
+impl Display for SnifferError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SnifferError::ConfigError(e) =>
+                write!(f, "Error in configuration: {}", e),
+            SnifferError::CaptureError(e) =>
+                write!(f, "Error capturing packets: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for SnifferError {}
+
+impl Display for ConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConfigError::InvalidDeviceId(e) =>
+                write!(f, "Invalid device id: {}", e),
+            ConfigError::InvalidTimeout(e) =>
+                write!(f, "Invalid timeout: {}", e),
+            ConfigError::InvalidFilePath(e) =>
+                write!(f, "Invalid file path: {}", e),
+            ConfigError::InvalidFilter(e) =>
+                write!(f, "Invalid filter: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for ConfigError {}
+
+impl Display for CaptureError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CaptureError::DeviceError(e) =>
+                write!(f, "Error getting device: {}", e),
+            CaptureError::CaptureError(e) =>
+                write!(f, "Error capturing packets: {}", e),
+            CaptureError::FilterError(e) =>
+                write!(f, "Error setting filter: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for CaptureError {}
 
 impl ControlBlock {
     fn new() -> Arc<ControlBlock> {

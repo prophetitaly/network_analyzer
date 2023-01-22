@@ -4,14 +4,23 @@ use libc::{c_long};
 use num_traits::FromPrimitive;
 
 #[derive(Debug, Clone, PartialEq)]
+/// Represents a packet captured by the library
 pub struct Packet {
+    /// The time when the packet was captured
     timestamp: String,
+    /// The source IP address
     source: String,
+    /// The destination IP address
     destination: String,
+    /// The source port
     source_port: Option<String>,
+    /// The destination port
     destination_port: Option<String>,
+    /// The protocol used by the packet
     protocol: String,
+    /// The length of the packet
     length: u32,
+    /// Some additional info that can be registered
     info: String,
 }
 
@@ -42,7 +51,7 @@ impl Packet {
         // Create a NaiveDateTime from the timestamp
         let naive = NaiveDateTime::from_timestamp(ts, ts_ns*1000);
 
-        // Create a normal DateTime from the NaiveDateTime
+        // Create a normal DateTime from the NaiveDateTime and then turn it into a Local DateTime
         let datetime: DateTime<Utc> = DateTime::from_utc(naive, Utc);
         let datetime_local = datetime.with_timezone(&chrono::Local);
 

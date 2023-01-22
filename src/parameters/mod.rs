@@ -1,9 +1,14 @@
 
 #[derive(Debug,Clone)]
+/// Represents the input parameters for the library
 pub struct Parameters {
+    /// The device id to capture from
     pub device_id: usize,
+    /// The timeout for the capture
     pub timeout: u32,
+    /// The path to the output file
     pub file_path: String,
+    /// The protocol filter
     pub filter: Option<String>,
 }
 
