@@ -18,9 +18,9 @@ pub struct ReportLine {
     pub timestamp_first: String,
     /// The last timestamp of the line
     pub timestamp_last: String,
-    /// The address of the local host plus an optional port
+    /// The first address plus an optional port
     pub source_optional_port: String,
-    /// The address of the remote host plus an optional port
+    /// The second address plus an optional port
     pub destination_optional_port: String,
     /// The protocols used in the communication
     pub protocols: Vec<String>,

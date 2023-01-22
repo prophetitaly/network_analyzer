@@ -25,7 +25,7 @@ mod report;
 use std::fmt::{Display, Error, Formatter};
 use std::fs;
 use std::string::ParseError;
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use etherparse::InternetSlice::{Ipv4, Ipv6};
 use etherparse::{SlicedPacket};
 use etherparse::LinkSlice::Ethernet2;
@@ -66,12 +66,6 @@ pub enum CaptureError {
     DeviceError(pcap::Error),
     CaptureError(pcap::Error),
     FilterError(pcap::Error),
-}
-
-/// Controls the capture process
-pub struct ControlBlock {
-    m: Mutex<CaptureState>,
-    cv: Condvar,
 }
 
 impl Display for SnifferError {
@@ -119,11 +113,29 @@ impl Display for CaptureError {
 
 impl std::error::Error for CaptureError {}
 
+/// Controls the capture process
+pub struct ControlBlock {
+    m: Mutex<CaptureState>,
+    cv: Condvar,
+    timeout: Mutex<u32>,
+    output_file: Mutex<String>,
+    capture: Mutex<Capture<Active>>,
+}
+
 impl ControlBlock {
     fn new() -> Arc<ControlBlock> {
         Arc::new(ControlBlock {
             m: Mutex::new(CaptureState::Capturing()),
             cv: Condvar::new(),
+            timeout: Mutex::new(5),
+            output_file: Mutex::new(String::new()),
+            capture: Mutex::new(Capture::from_device(Device::lookup().unwrap().unwrap())
+                .unwrap()
+                .promisc(true)
+                .snaplen(5000)
+                .timeout(1000)
+                .open()
+                .unwrap()),
         })
     }
 
@@ -164,6 +176,67 @@ impl ControlBlock {
             state = self.cv.wait(state).unwrap();
         }
     }
+
+    /// Gets the timeout of the capture.
+    pub fn get_timeout(&self) -> u32 {
+        let t = self.timeout.lock().unwrap();
+        *t
+    }
+
+    /// Sets the timeout for the capture.
+    pub fn set_timeout(&self, timeout: u32) {
+        let mut t = self.timeout.lock().unwrap();
+        *t = timeout;
+    }
+
+    /// Gets the output file of the capture.
+    pub fn get_output_file(&self) -> String {
+        let f = self.output_file.lock().unwrap();
+        f.clone()
+    }
+
+    /// Sets the output file for the capture.
+    pub fn set_output_file(&self, output_file: String) {
+        let mut f = self.output_file.lock().unwrap();
+        *f = output_file;
+    }
+
+    /// Gets the capture.
+    pub fn get_capture(&self) -> MutexGuard<'_, Capture<Active>> {
+        let c = self.capture.lock().unwrap();
+        c
+    }
+
+    /// Sets the capture.
+    fn set_capture(&self, capture: Capture<Active>) {
+        let mut c = self.capture.lock().unwrap();
+        *c = capture;
+    }
+
+    pub fn set_device(&self, device_id: usize) {
+        let main_device = Device::list().unwrap();
+        let device = main_device.get(device_id).unwrap().clone();
+        self.set_capture(Capture::from_device(device).unwrap()
+            .promisc(true)
+            .snaplen(5000)
+            .timeout(1000)
+            .open()
+            .unwrap());
+    }
+
+    pub fn set_filter(&self, filter: String) -> Result<(), CaptureError> {
+        let mut capture = self.get_capture();
+        match capture.filter(&filter, true) {
+            Ok(_) => {
+                self.resume();
+                Ok(())
+            },
+            Err(e) => {
+                self.wait();
+                Err(CaptureError::FilterError(e))
+            },
+        }
+    }
 }
 
 /// Gets the list of network interfaces with their addresses.
@@ -176,7 +249,7 @@ pub fn get_devices() -> Result<Vec<(String, Vec<Address>)>, pcap::Error> {
     if devices_list.is_err() {
         return Err(devices_list.err().unwrap());
     }
-    let mut devices = devices_list.unwrap();
+    let devices = devices_list.unwrap();
     let mut device_names: Vec<(String, Vec<Address>)> = Vec::new();
     for device in devices {
         if device.desc.is_some() {
@@ -213,14 +286,23 @@ pub fn analyze_network(parameters: Parameters) -> Result<Arc<ControlBlock>, Erro
     }
 
     let control_block = ControlBlock::new();
+    if !parameters.file_path.is_empty() {
+        control_block.set_output_file(parameters.file_path);
+    }
+    if parameters.timeout != 0 {
+        control_block.set_timeout(parameters.timeout);
+    }
     let control_block_clone = control_block.clone();
+
+    control_block_clone.set_capture(cap);
+
     std::thread::spawn(move || {
-        read_packets(cap, parameters, control_block_clone);
+        read_packets(control_block_clone);
     });
     Ok(control_block)
 }
 
-fn read_packets(mut capture: Capture<Active>, parameters: Parameters, control_block: Arc<ControlBlock>) {
+fn read_packets(control_block: Arc<ControlBlock>) {
     let report = Arc::new(Mutex::new(Report::default()));
 
     //create a thread pool to handle the packets
@@ -231,7 +313,7 @@ fn read_packets(mut capture: Capture<Active>, parameters: Parameters, control_bl
     let control_block_clone = control_block.clone();
     std::thread::spawn(move || {
         loop {
-            std::thread::sleep(std::time::Duration::from_secs(u64::from(parameters.timeout)));
+            std::thread::sleep(std::time::Duration::from_secs(u64::from(control_block_clone.get_timeout())));
             match control_block_clone.get_state() {
                 CaptureState::Stopped() => (),
                 CaptureState::Paused() => {
@@ -239,7 +321,7 @@ fn read_packets(mut capture: Capture<Active>, parameters: Parameters, control_bl
                     continue;
                 }
                 CaptureState::Capturing() => {
-                    fs::write(&parameters.file_path, report_clone_out.lock().unwrap().to_formatted_table().to_string()).expect("Wrong output file path!");
+                    fs::write(control_block_clone.get_output_file(), report_clone_out.lock().unwrap().to_formatted_table().to_string()).expect("Wrong output file path!");
                 }
             }
         }
@@ -253,7 +335,7 @@ fn read_packets(mut capture: Capture<Active>, parameters: Parameters, control_bl
                 continue;
             }
             CaptureState::Capturing() => {
-                match capture.next_packet() {
+                match control_block.get_capture().next_packet() {
                     Ok(packet) => {
                         //recheck the state of the capture and discard data if it has come after it was paused or stopped
                         match control_block.get_state() {
