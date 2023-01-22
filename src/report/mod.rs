@@ -29,11 +29,11 @@ pub struct ReportLine {
 }
 
 impl Report {
-    pub fn new() -> Self {
-        Report {
-            report_lines: HashMap::new(),
-        }
-    }
+    // pub fn new() -> Self {
+    //     Report {
+    //         report_lines: HashMap::new(),
+    //     }
+    // }
     pub fn get_report_lines(&mut self) -> &mut HashMap<(String, String), ReportLine> {
         &mut self.report_lines
     }
@@ -52,7 +52,7 @@ impl Report {
             mem::swap(&mut addr1, &mut addr2);
         }
         let key = (addr1, addr2).clone();
-        let mut report_lines = self.get_report_lines();
+        let report_lines = self.get_report_lines();
 
         if report_lines.get_mut(&key).is_none() {
             let mut rl = ReportLine::default();
@@ -95,16 +95,16 @@ impl Display for Report {
 }
 
 impl ReportLine {
-    pub fn new() -> Self {
-        ReportLine {
-            timestamp_first: String::new(),
-            timestamp_last: String::new(),
-            source_optional_port: String::new(),
-            destination_optional_port: String::new(),
-            protocols: Vec::new(),
-            bytes_total: 0,
-        }
-    }
+    // pub fn new() -> Self {
+    //     ReportLine {
+    //         timestamp_first: String::new(),
+    //         timestamp_last: String::new(),
+    //         source_optional_port: String::new(),
+    //         destination_optional_port: String::new(),
+    //         protocols: Vec::new(),
+    //         bytes_total: 0,
+    //     }
+    // }
     pub fn set_timestamp_first(&mut self, timestamp_first: String) {
         self.timestamp_first = timestamp_first;
     }
@@ -134,23 +134,23 @@ impl ReportLine {
             self.timestamp_first = packet.get_timestamp().clone();
         }
     }
-    pub fn to_string(&self) -> String {
-        let mut s = String::new();
-        s.push_str(&self.timestamp_first);
-        s.push_str(" ");
-        s.push_str(&self.timestamp_last);
-        s.push_str(" ");
-        s.push_str(&self.source_optional_port);
-        s.push_str(" ");
-        s.push_str(&self.destination_optional_port);
-        s.push_str(" ");
-        for protocol in self.protocols.iter() {
-            s.push_str(protocol);
-            s.push_str(", ");
-        }
-        s.push_str(&self.bytes_total.to_string());
-        s
-    }
+    // pub fn to_string(&self) -> String {
+    //     let mut s = String::new();
+    //     s.push_str(&self.timestamp_first);
+    //     s.push_str(" ");
+    //     s.push_str(&self.timestamp_last);
+    //     s.push_str(" ");
+    //     s.push_str(&self.source_optional_port);
+    //     s.push_str(" ");
+    //     s.push_str(&self.destination_optional_port);
+    //     s.push_str(" ");
+    //     for protocol in self.protocols.iter() {
+    //         s.push_str(protocol);
+    //         s.push_str(", ");
+    //     }
+    //     s.push_str(&self.bytes_total.to_string());
+    //     s
+    // }
 }
 
 impl Display for ReportLine {

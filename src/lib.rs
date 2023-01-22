@@ -9,7 +9,7 @@
 //!
 //! # Output
 //! The output is written to a file in the following format:
-//! Timestamp first | Timestamp last | Address 1 | Address 2 | Protocols Total tx size in Bytes
+//! Timestamp first | Timestamp last | Address 1 | Address 2 | Protocols | Bytes Total
 //!
 //! # Usage
 //! let control_block = analyze_network(Parameters {
@@ -22,9 +22,9 @@ mod packet;
 pub mod parameters;
 mod report;
 
-use std::fmt::{Display, Error, Formatter};
+use std::fmt::{Display, Formatter};
 use std::fs;
-use std::string::ParseError;
+use std::fs::{File, metadata};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use etherparse::InternetSlice::{Ipv4, Ipv6};
 use etherparse::{SlicedPacket};
@@ -32,6 +32,7 @@ use etherparse::LinkSlice::Ethernet2;
 use etherparse::TransportSlice::{Icmpv4, Icmpv6, Tcp, Udp, Unknown};
 use pcap::{Device, Capture, PacketHeader, Address, Active};
 use threadpool::ThreadPool;
+use crate::ConfigError::{InvalidDeviceId, InvalidFilter};
 use crate::packet::Packet as MyPacket;
 use crate::parameters::Parameters;
 use crate::report::Report;
@@ -55,10 +56,10 @@ pub enum SnifferError {
 
 #[derive(Debug)]
 pub enum ConfigError {
-    InvalidDeviceId(ParseError),
-    InvalidTimeout(ParseError),
-    InvalidFilePath(ParseError),
-    InvalidFilter(ParseError),
+    InvalidDeviceId(pcap::Error),
+    InvalidTimeout(pcap::Error),
+    InvalidFilePath(String),
+    InvalidFilter(pcap::Error),
 }
 
 #[derive(Debug)]
@@ -74,7 +75,7 @@ impl Display for SnifferError {
             SnifferError::ConfigError(e) =>
                 write!(f, "Error in configuration: {}", e),
             SnifferError::CaptureError(e) =>
-                write!(f, "Error capturing packets: {}", e),
+                write!(f, "Error in capture: {}", e),
         }
     }
 }
@@ -196,9 +197,25 @@ impl ControlBlock {
     }
 
     /// Sets the output file for the capture.
-    pub fn set_output_file(&self, output_file: String) {
+    pub fn set_output_file(&self, output_file: String) -> Result<(), SnifferError> {
         let mut f = self.output_file.lock().unwrap();
-        *f = output_file;
+        match metadata(output_file.clone()) {
+            Ok(_) => {
+                *f = output_file;
+                Ok(())
+            },
+            Err(_) => {
+                match File::create(output_file.clone()) {
+                    Ok(_) => {
+                        *f = output_file;
+                        Ok(())
+                    },
+                    Err(_) => {
+                        Err(SnifferError::ConfigError(ConfigError::InvalidFilePath("Invalid file path".to_string())))
+                    }
+                }
+            }
+        }
     }
 
     /// Gets the capture.
@@ -213,15 +230,31 @@ impl ControlBlock {
         *c = capture;
     }
 
-    pub fn set_device(&self, device_id: usize) {
-        let main_device = Device::list().unwrap();
-        let device = main_device.get(device_id).unwrap().clone();
-        self.set_capture(Capture::from_device(device).unwrap()
-            .promisc(true)
-            .snaplen(5000)
-            .timeout(1000)
-            .open()
-            .unwrap());
+    /// Sets the device for the capture. Index starts from 1.
+    pub fn set_device(&self, device_id: usize) -> Result<(), SnifferError>{
+        let device = match Device::list(){
+            Ok(d) => {
+                match d.get(device_id - 1) {
+                    Some(d) => d.clone(),
+                    None => return Err(SnifferError::ConfigError(InvalidDeviceId(pcap::Error::PcapError("Invalid device id".to_string()))))
+                }
+            },
+            Err(e) => return Err(SnifferError::ConfigError(InvalidDeviceId(e)))
+        };
+
+        let cap =
+            match match Capture::from_device(device){
+                Ok(c) => c.promisc(true)
+                    .snaplen(5000)
+                    .timeout(1000)
+                    .open(),
+                Err(e) => return Err(SnifferError::ConfigError(InvalidDeviceId(e)))
+            } {
+                Ok(c) => c,
+                Err(e) => return Err(SnifferError::CaptureError(CaptureError::CaptureError(e)))
+            };
+        self.set_capture(cap);
+        Ok(())
     }
 
     pub fn set_filter(&self, filter: String) -> Result<(), CaptureError> {
@@ -266,28 +299,35 @@ pub fn get_devices() -> Result<Vec<(String, Vec<Address>)>, pcap::Error> {
 /// * device_id: The id of the network device to capture from
 /// * timeout: The time after which the capture stops
 /// * file_path: The path of the file where the captured packets will be saved
-/// * filter: An optional filter to be applied to the captured packets (in BPF format)
-pub fn analyze_network(parameters: Parameters) -> Result<Arc<ControlBlock>, Error> {
+/// * filter: An optional filter to be applied to the captured packets (in BPF format - https://biot.com/capstats/bpf.html)
+pub fn analyze_network(parameters: Parameters) -> Result<Arc<ControlBlock>, SnifferError> {
     let device_id = parameters.device_id;
     let main_device = Device::list().unwrap();
     let device = main_device.get(device_id).unwrap().clone();
-    let mut cap = Capture::from_device(device).unwrap()
-        .promisc(true)
-        .snaplen(5000)
-        .timeout(1000)
-        .open()
-        .unwrap();
-    //TODO: inserire errore se il dispositivo è sbagliato
+    let mut cap =
+        match match Capture::from_device(device){
+            Ok(c) => c.promisc(true)
+                .snaplen(5000)
+                .timeout(1000)
+                .open(),
+            Err(e) => return Err(SnifferError::ConfigError(InvalidDeviceId(e)))
+        } {
+            Ok(c) => c,
+            Err(e) => return Err(SnifferError::CaptureError(CaptureError::CaptureError(e)))
+        };
 
     if let Some(filter) = &parameters.filter {
-        cap
-            .filter(filter, true)
-            .expect("Filters invalid, please check the documentation.");
+        if let Err(e) = cap.filter(filter, true) {
+            return Err(SnifferError::ConfigError(InvalidFilter(e)));
+        };
     }
 
     let control_block = ControlBlock::new();
     if !parameters.file_path.is_empty() {
-        control_block.set_output_file(parameters.file_path);
+        match control_block.set_output_file(parameters.file_path){
+            Ok(_) => {},
+            Err(e) => return Err(e)
+        };
     }
     if parameters.timeout != 0 {
         control_block.set_timeout(parameters.timeout);
@@ -321,9 +361,12 @@ fn read_packets(control_block: Arc<ControlBlock>) {
                     continue;
                 }
                 CaptureState::Capturing() => {
-                    fs::write(control_block_clone.get_output_file(), report_clone_out.lock().unwrap().to_formatted_table().to_string()).expect("Wrong output file path!");
+                    match fs::write(control_block_clone.get_output_file(), report_clone_out.lock().unwrap().to_formatted_table().to_string()){
+                        Ok(_) => (),
+                        Err(_) => continue
+                    }
                 }
-            }
+            };
         }
     });
 
@@ -353,7 +396,6 @@ fn read_packets(control_block: Arc<ControlBlock>) {
                                             fill_timestamp_and_lenght(&packet_header, &mut result);
                                             fill_ip_address(&sliced_packet, &mut result);
                                             fill_protocol_and_ports(&sliced_packet, &mut result);
-                                            // println!("{:?}", result);
                                             report_copy.lock().unwrap().add_packet(result);
                                         }
                                     }

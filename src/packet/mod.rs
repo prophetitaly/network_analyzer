@@ -49,7 +49,7 @@ impl Packet {
             ts_ns = u32::from_i32(*timestamp_ns).unwrap();
         }
         // Create a NaiveDateTime from the timestamp
-        let naive = NaiveDateTime::from_timestamp(ts, ts_ns*1000);
+        let naive = NaiveDateTime::from_timestamp_opt(ts, ts_ns*1000).unwrap();
 
         // Create a normal DateTime from the NaiveDateTime and then turn it into a Local DateTime
         let datetime: DateTime<Utc> = DateTime::from_utc(naive, Utc);
@@ -104,9 +104,6 @@ impl Packet {
     }
     pub fn get_length(&self) -> &u32 {
         &self.length
-    }
-    pub fn get_info(&self) -> &String {
-        &self.info
     }
 }
 
