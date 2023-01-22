@@ -22,6 +22,7 @@ mod packet;
 pub mod parameters;
 mod report;
 
+use std::collections::VecDeque;
 use std::fmt::{Display, Formatter};
 use std::fs;
 use std::fs::{File, metadata};
@@ -83,15 +84,15 @@ impl Display for SnifferError {
 impl std::error::Error for SnifferError {}
 
 impl Display for ConfigError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ConfigError::InvalidDeviceId(e) =>
+            InvalidDeviceId(e) =>
                 write!(f, "Invalid device id: {}", e),
             ConfigError::InvalidTimeout(e) =>
                 write!(f, "Invalid timeout: {}", e),
             ConfigError::InvalidFilePath(e) =>
                 write!(f, "Invalid file path: {}", e),
-            ConfigError::InvalidFilter(e) =>
+            InvalidFilter(e) =>
                 write!(f, "Invalid filter: {}", e),
         }
     }
@@ -100,7 +101,7 @@ impl Display for ConfigError {
 impl std::error::Error for ConfigError {}
 
 impl Display for CaptureError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             CaptureError::DeviceError(e) =>
                 write!(f, "Error getting device: {}", e),
@@ -121,6 +122,7 @@ pub struct ControlBlock {
     timeout: Mutex<u32>,
     output_file: Mutex<String>,
     capture: Mutex<Capture<Active>>,
+    error_list: Mutex<VecDeque<SnifferError>>,
 }
 
 impl ControlBlock {
@@ -137,6 +139,7 @@ impl ControlBlock {
                 .timeout(1000)
                 .open()
                 .unwrap()),
+            error_list: Mutex::new(VecDeque::new()),
         })
     }
 
@@ -269,6 +272,17 @@ impl ControlBlock {
                 Err(CaptureError::FilterError(e))
             },
         }
+    }
+
+    pub fn get_first_error(&self) -> Option<SnifferError> {
+        let mut e = self.error_list.lock().unwrap();
+        let error = e.pop_front();
+        error
+    }
+
+    pub fn push_error(&self, error: SnifferError) {
+        let mut e = self.error_list.lock().unwrap();
+        e.push_back(error);
     }
 }
 
@@ -403,7 +417,16 @@ fn read_packets(control_block: Arc<ControlBlock>) {
                             }
                         }
                     }
-                    Err(..) => {}
+                    Err(e) => {
+                        match e {
+                            //ignore only the timeout error, I wanted to use a timeout to be able to check the state of the capture
+                            pcap::Error::TimeoutExpired => (),
+                            _ => {
+                                control_block.push_error(SnifferError::CaptureError(CaptureError::CaptureError(e)));
+                                break;
+                            }
+                        }
+                    }
                 }
             }
         }

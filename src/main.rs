@@ -1,8 +1,9 @@
 use std::io;
-use network_analyzer::{analyze_network, get_devices};
+use network_analyzer::{analyze_network, ControlBlock, get_devices};
 use network_analyzer::parameters::Parameters;
 
 use clap::{Args, Parser, Subcommand};
+use libc::exit;
 
 /// Network analyzer
 #[derive(Parser, Debug)]
@@ -78,9 +79,8 @@ fn main() {
                 - \"device\" to list all devices and choose one \n \
                 - \"timeout\" to change the report generation interval\n \
                 - \"output\" to change the output file path\n");
-                let mut input = String::new();
                 println!("Command: ");
-                io::stdin().read_line(&mut input).expect("Failed to read line");
+                let input = read_input(&cb, true);
                 clear_screen();
                 match input.trim() {
                     "pause" => {
@@ -99,8 +99,7 @@ fn main() {
                         loop {
                             clear_screen();
                             println!("Insert the new timeout: ");
-                            let mut input = String::new();
-                            io::stdin().read_line(&mut input).expect("Failed to read line");
+                            let input = read_input(&cb, true);
                             match input.trim().parse::<u32>() {
                                 Ok(timeout) => {
                                     cb.set_timeout(timeout);
@@ -113,14 +112,12 @@ fn main() {
                                 }
                             }
                         }
-
                     }
                     "output" => {
                         loop {
                             clear_screen();
                             println!("Insert the new output file path: ");
-                            let mut input = String::new();
-                            io::stdin().read_line(&mut input).expect("Failed to read line");
+                            let input = read_input(&cb, true);
                             let output = input.trim().to_string();
                             match cb.set_output_file(output.clone()) {
                                 Ok(_) => {
@@ -149,8 +146,7 @@ fn main() {
                                 println!("{}) {} {:?}", d.0 + 1, d.1.0, d.1.1);
                             }
                             println!("Insert the new device id: ");
-                            let mut input = String::new();
-                            io::stdin().read_line(&mut input).expect("Failed to read line");
+                            let input = read_input(&cb, true);
                             let device_id = input.trim().parse::<usize>().unwrap();
                             match cb.set_device(device_id - 1) {
                                 Ok(_) => {
@@ -169,8 +165,7 @@ fn main() {
                     "filter" => {
                         clearscreen::clear().expect("failed to clear screen");
                         println!("Insert the new filter: ");
-                        let mut input = String::new();
-                        io::stdin().read_line(&mut input).expect("Failed to read line");
+                        let input = read_input(&cb, true);
                         let filter = input.trim().to_string();
                         if cb.set_filter(filter.clone()).is_err() {
                             println!("Filtro not valid");
@@ -193,4 +188,42 @@ fn clear_screen() {
         Ok(_) => {}
         Err(_) => {}
     };
+}
+
+fn read_input(cb: &ControlBlock, o: bool) -> String {
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).expect("Failed to read line");
+    if o {
+        error_handler(cb);
+    }
+    input.trim().to_string()
+}
+
+fn error_handler(cb: &ControlBlock) {
+    loop {
+        if let Some(e) = cb.get_first_error() {
+            clear_screen();
+            println!("An error during the packet capture has occured: {}", e);
+            loop {
+                println!("Would you like to ignore and continue the sniffing process or stop the execution?\n \
+                - \"continue\" to go on\n \
+                - \"stop\" for stopping the execution \n ");
+                let input = read_input(cb, false);
+                match input.trim() {
+                    "continue" => {
+                        clear_screen();
+                        break;
+                    },
+                    "stop" => unsafe {
+                        cb.stop();
+                        exit(0);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        else {
+            break;
+        }
+    }
 }
