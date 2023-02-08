@@ -5,7 +5,7 @@
 //! * device_id: The id of the network device to capture from
 //! * timeout: The time after which the capture stops
 //! * file_path: The path of the file where the captured packets will be saved
-//! * filter: An optional filter to be applied to the captured packets (in BPF format)
+//! * filter: An optional filter to be applied to the captured packets (in BPF format https://biot.com/capstats/bpf.html)
 //!
 //! # Output
 //! The output is written to a file in the following format:

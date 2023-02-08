@@ -8,7 +8,7 @@ pub struct Parameters {
     pub timeout: u32,
     /// The path to the output file
     pub file_path: String,
-    /// The protocol filter
+    /// The protocol filter in BPF format
     pub filter: Option<String>,
 }
 
