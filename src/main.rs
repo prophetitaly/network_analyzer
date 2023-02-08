@@ -149,7 +149,7 @@ fn main() {
                             println!("Insert the new device id: ");
                             let input = read_input(&cb, true);
                             let device_id = input.trim().parse::<usize>().unwrap();
-                            match cb.set_device(device_id - 1) {
+                            match cb.set_device(device_id) {
                                 Ok(_) => {
                                     clear_screen();
                                     println!("Device id set to {}", device_id);
