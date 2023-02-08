@@ -78,9 +78,10 @@ fn main() {
                 - \"exit\" to exit \n \
                 - \"device\" to list all devices and choose one \n \
                 - \"timeout\" to change the report generation interval\n \
-                - \"output\" to change the output file path\n");
+                - \"output\" to change the output file path\n \
+                - \"errors\" to see the errors occurred during the capture\n");
                 println!("Command: ");
-                let input = read_input(&cb, true);
+                let input = read_input();
                 clear_screen();
                 match input.trim() {
                     "pause" => {
@@ -99,7 +100,7 @@ fn main() {
                         loop {
                             clear_screen();
                             println!("Insert the new timeout: ");
-                            let input = read_input(&cb, true);
+                            let input = read_input();
                             match input.trim().parse::<u32>() {
                                 Ok(timeout) => {
                                     cb.set_timeout(timeout);
@@ -118,7 +119,7 @@ fn main() {
                         loop {
                             clear_screen();
                             println!("Insert the new output file path: ");
-                            let input = read_input(&cb, true);
+                            let input = read_input();
                             let output = input.trim().to_string();
                             match cb.set_output_file(output.clone()) {
                                 Ok(_) => {
@@ -147,7 +148,7 @@ fn main() {
                                 println!("{}) {} {:?}", d.0 + 1, d.1.0, d.1.1);
                             }
                             println!("Insert the new device id: ");
-                            let input = read_input(&cb, true);
+                            let input = read_input();
                             let device_id = input.trim().parse::<usize>().unwrap();
                             match cb.set_device(device_id) {
                                 Ok(_) => {
@@ -166,14 +167,17 @@ fn main() {
                     "filter" => {
                         clearscreen::clear().expect("failed to clear screen");
                         println!("Insert the new filter: ");
-                        let input = read_input(&cb, true);
+                        let input = read_input();
                         let filter = input.trim().to_string();
                         if cb.set_filter(filter.clone()).is_err() {
-                            println!("Filtro not valid");
+                            println!("Filter not valid");
                             continue;
                         }
                         clear_screen();
-                        println!("Filtro set");
+                        println!("Filter set");
+                    }
+                    "errors" => {
+                        error_handler(&cb);
                     }
                     _ => {
                         println!("Command not valid");
@@ -191,12 +195,12 @@ fn clear_screen() {
     };
 }
 
-fn read_input(cb: &ControlBlock, o: bool) -> String {
+fn read_input() -> String {
     let mut input = String::new();
     io::stdin().read_line(&mut input).expect("Failed to read line");
-    if o {
-        error_handler(cb);
-    }
+    // if o {
+    //     error_handler(cb);
+    // }
     input.trim().to_string()
 }
 
@@ -215,7 +219,7 @@ fn error_handler(cb: &ControlBlock) {
             println!("Would you like to ignore and continue the sniffing process or stop the execution?\n \
                 - \"continue\" to go on\n \
                 - \"stop\" for stopping the execution \n ");
-            let input = read_input(cb, false);
+            let input = read_input();
             match input.trim() {
                 "continue" => {
                     clear_screen();
@@ -230,5 +234,9 @@ fn error_handler(cb: &ControlBlock) {
                 }
             }
         }
+    }
+    else {
+        clear_screen();
+        println!("No errors occurred");
     }
 }
