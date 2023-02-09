@@ -222,7 +222,7 @@ impl ControlBlock {
     }
 
     /// Gets the capture.
-    pub fn get_capture(&self) -> MutexGuard<'_, Capture<Active>> {
+    fn get_capture(&self) -> MutexGuard<'_, Capture<Active>> {
         let c = self.capture.lock().unwrap();
         c
     }
